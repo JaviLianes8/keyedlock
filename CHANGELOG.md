@@ -9,3 +9,6 @@ All notable changes to this project are documented here. The format follows
 ## [0.1.0]
 
 - First release.
+- `KeyedLock`: per-key locking with reference-counted table cleanup and an optional
+  reentrant mode.
+- `StripedLock`: a fixed pool of locks that caps memory for large or unbounded key spaces.

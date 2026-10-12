@@ -92,6 +92,18 @@ def test_zero_timeout_on_a_free_key_succeeds() -> None:
     asyncio.run(main())
 
 
+def test_an_uncontended_timed_lock_does_not_suspend() -> None:
+    # The free-key path takes the lock without a helper task or a trip round the loop.
+    async def main() -> None:
+        lock = AsyncKeyedLock()
+        ran: list[int] = []
+        asyncio.get_running_loop().call_soon(ran.append, 1)
+        async with lock.lock("k", timeout=1):
+            assert ran == []
+
+    asyncio.run(main())
+
+
 def test_a_timeout_is_met_when_the_holder_leaves_in_time() -> None:
     async def main() -> None:
         lock = AsyncKeyedLock()
@@ -130,6 +142,24 @@ def test_cancelling_a_waiter_leaves_nothing_behind() -> None:
     asyncio.run(main())
 
 
+def test_a_cancelled_timed_waiter_does_not_block_the_queue_behind_it() -> None:
+    async def main() -> None:
+        lock = AsyncKeyedLock()
+        async with lock.lock("k"):
+            first = asyncio.create_task(_enter(lock, "k", 10))
+            await asyncio.sleep(0.01)
+            second = asyncio.create_task(_enter(lock, "k", 10))
+            await asyncio.sleep(0.01)
+            first.cancel()
+            await asyncio.sleep(0)
+        await asyncio.wait_for(second, 5)
+        assert first.cancelled()
+        await asyncio.sleep(0)
+        assert lock.active_keys() == 0
+
+    asyncio.run(main())
+
+
 async def _enter(lock: AsyncKeyedLock, key: str, timeout: float | None) -> None:
     async with lock.lock(key, timeout=timeout):
         pass
@@ -157,30 +187,3 @@ def test_an_exception_in_the_body_releases_the_key() -> None:
         assert lock.active_keys() == 0
 
     asyncio.run(main())
-
-
-def test_lock_many_orders_keys_and_is_all_or_nothing() -> None:
-    async def main() -> None:
-        lock = AsyncKeyedLock()
-
-        async def take(keys: list[int]) -> None:
-            for _ in range(200):
-                async with lock.lock_many(keys, timeout=10):
-                    await asyncio.sleep(0)
-
-        await asyncio.wait_for(asyncio.gather(take([1, 2]), take([2, 1])), 20)
-        async with lock.lock("c"):
-            with pytest.raises(TimeoutError):
-                await asyncio.create_task(_enter_many(lock, ["a", "b", "c"], 0.01))
-            assert lock.active_keys() == 1
-        with pytest.raises(TypeError, match="single str"):
-            async with lock.lock_many("ab"):
-                pass
-        assert lock.active_keys() == 0
-
-    asyncio.run(main())
-
-
-async def _enter_many(lock: AsyncKeyedLock, keys: list[str], timeout: float | None) -> None:
-    async with lock.lock_many(keys, timeout=timeout):
-        pass

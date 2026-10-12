@@ -130,3 +130,28 @@ def test_keys_that_cannot_be_sorted_are_rejected_before_locking() -> None:
     with pytest.raises(TypeError, match="sorted"), lock.lock_many(["a", 1]):
         pass
     assert lock.active_keys() == 0
+
+
+def test_later_keys_get_only_what_is_left_of_the_budget() -> None:
+    # "a" frees at 0.4 s and "b" at 0.8 s. With one shared 0.6 s budget the wait for "b"
+    # gives up at 0.6 s; a fresh 0.6 s per key would wrongly succeed at 0.8 s.
+    lock = KeyedLock()
+    ready = threading.Barrier(3)
+
+    def hold(key: str, seconds: float) -> Callable[[], None]:
+        def run() -> None:
+            with lock.lock(key):
+                ready.wait()
+                threading.Event().wait(seconds)
+
+        return run
+
+    holders = [threading.Thread(target=hold("a", 0.4)), threading.Thread(target=hold("b", 0.8))]
+    for thread in holders:
+        thread.start()
+    ready.wait()
+    with pytest.raises(TimeoutError, match="'b'"), lock.lock_many(["a", "b"], timeout=0.6):
+        pass
+    for thread in holders:
+        thread.join(5)
+    assert lock.active_keys() == 0

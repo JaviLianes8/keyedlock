@@ -149,3 +149,22 @@ def test_sequential_reuse_leaves_no_residue() -> None:
     with lock.lock("x"):
         pass
     assert lock.active_keys() == 0
+
+
+def test_an_interrupt_just_after_taking_the_lock_releases_it() -> None:
+    from keyedlock._primitive import Slot
+
+    class Interrupted(Slot):
+        @property
+        def owner(self) -> int | None:
+            return None
+
+        @owner.setter
+        def owner(self, value: int | None) -> None:
+            if value is not None:
+                raise KeyboardInterrupt
+
+    slot = Interrupted(False)
+    with pytest.raises(KeyboardInterrupt):
+        slot.acquire(None)
+    assert slot.lock.acquire(False)  # the lock was given back

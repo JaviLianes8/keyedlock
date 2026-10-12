@@ -12,12 +12,15 @@ All notable changes to this project are documented here. The format follows
 
 - `timeout` on every `lock`: `None` waits for ever, `0` tries once, a number of seconds
   waits at most that long, then `TimeoutError`. Negative or NaN values raise `ValueError`,
-  non-numbers `TypeError`; values above `threading.TIMEOUT_MAX` mean no limit.
+  values that are not real numbers `TypeError`; values above `threading.TIMEOUT_MAX`
+  (huge integers included) mean no limit.
 - `lock_many(keys, *, timeout=None)` on `KeyedLock` and `StripedLock`: takes several keys
   (or stripes) once each in one global order, so callers cannot deadlock each other, and
-  releases what it took if a later key fails.
-- `AsyncKeyedLock`: the asyncio counterpart, fair per key, safe under cancellation and
-  timeouts, with `lock`, `lock_many` and `active_keys`.
+  releases what it took if a later key fails. Keys without a total order (sets, NaN,
+  mixed types) and a bare `str` raise `TypeError`.
+- `AsyncKeyedLock`: the asyncio counterpart, strictly first come, first served per key
+  (timed waiters included), safe under cancellation and timeouts, with `lock`,
+  `lock_many` and `active_keys`.
 
 ### Changed
 
@@ -28,7 +31,8 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 
 - An exception raised while waiting for a key (for example `KeyboardInterrupt`) no longer
-  leaves the key in the table for ever.
+  leaves the key in the table for ever, and neither does a key whose hash changed while
+  it was held.
 
 ## [0.1.0]
 

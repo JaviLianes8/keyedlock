@@ -54,3 +54,15 @@ def test_later_keys_get_only_what_is_left_of_the_budget() -> None:
         assert lock.active_keys() == 0
 
     asyncio.run(main())
+
+
+@pytest.mark.parametrize("bad", [float("nan"), -1])
+def test_bad_timeouts_are_rejected_before_anything_is_taken(bad: float) -> None:
+    async def main() -> None:
+        lock = AsyncKeyedLock()
+        with pytest.raises(ValueError):
+            async with lock.lock("k", timeout=bad):
+                pass
+        assert lock.active_keys() == 0
+
+    asyncio.run(main())

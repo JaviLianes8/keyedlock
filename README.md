@@ -43,8 +43,8 @@ print(locks.active_keys())  # 0
 Each key gets its own lock on first use. When the last holder and waiter leave, the lock
 is dropped from the table, so the table never grows with the number of distinct keys you
 have touched. `active_keys()` reports how many keys are held or waited on right now. A
-wait that is interrupted (`KeyboardInterrupt`, a timeout, an exception) gives its place
-back too. Keys follow `dict` rules: `1`, `1.0` and `True` are the same key.
+wait that ends early (a timeout, `KeyboardInterrupt`, a cancelled task) gives its place
+back too, and so does a key whose hash changed while it was held. Keys follow `dict` rules: `1`, `1.0` and `True` are the same key.
 
 ### Timeouts
 
@@ -106,9 +106,11 @@ with nested.lock("job-42"), nested.lock("job-42"):
 
 Taking two keys by nesting `lock` calls deadlocks as soon as another thread takes the
 same pair in the opposite order. `lock_many` deduplicates the keys and takes them in
-sorted order, so every caller agrees on the order. The keys must be sortable against
-each other (all `str`, all `int`, ...). `timeout` covers the whole acquisition, and if
-any key cannot be taken, the ones already taken are released.
+sorted order, so every caller agrees on the order. The keys need a total order (all
+`str`, all `int`, ...); sets, NaN and mixed types raise `TypeError` before anything is
+locked. Pass a collection: a bare `str` is refused rather than split into characters.
+`timeout` covers the whole acquisition, and if any key cannot be taken, the ones already
+taken are released.
 
 ```python
 from keyedlock import KeyedLock
@@ -149,10 +151,11 @@ with locks.lock_many(["user-7", "user-9"], timeout=1):
 
 ### asyncio
 
-`AsyncKeyedLock` gives coroutines the same contract on top of `asyncio.Lock`. Waiters on
-one key are served first come, first served. A task cancelled or timed out while waiting
-leaves nothing behind. Like `asyncio.Lock`, it is not thread-safe: use an instance from
-one event loop.
+`AsyncKeyedLock` gives coroutines the same contract. Waiters on one key are served first
+come, first served, whether or not they pass a timeout: the lock is handed straight to
+the oldest waiter, so nobody can slip past the queue. A task cancelled or timed out while
+waiting leaves nothing behind. Like `asyncio.Lock`, it is not thread-safe: use an
+instance from one event loop.
 
 ```python
 import asyncio
@@ -184,7 +187,7 @@ print(log)  # ['ann:a:start', 'ann:a:end', 'ann:b:start', 'ann:b:end']
 
 `KeyedLock` and `StripedLock` sit on `threading.Lock`, whose documentation leaves the
 order in which waiters are woken undefined; under sustained contention on one key a
-waiter can be overtaken. `AsyncKeyedLock` is fair, as `asyncio.Lock` is.
+waiter can be overtaken. `AsyncKeyedLock` is strictly first come, first served.
 
 ## API
 
@@ -201,8 +204,8 @@ waiter can be overtaken. `AsyncKeyedLock` is fair, as `asyncio.Lock` is.
 
 `lock` and `lock_many` raise `TimeoutError` when the timeout runs out, `RuntimeError` on
 re-entry into a non-reentrant lock, `ValueError` for a negative or NaN timeout and
-`TypeError` for a timeout that is not a number. A timeout above `threading.TIMEOUT_MAX`
-means no limit.
+`TypeError` for a timeout that is not a real number. A timeout above
+`threading.TIMEOUT_MAX` means no limit.
 
 ## Why
 

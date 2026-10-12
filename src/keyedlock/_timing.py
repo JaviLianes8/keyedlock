@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import math
+import numbers
 import threading
 import time
 from collections.abc import Hashable, Iterable
+from itertools import pairwise
 from typing import Any, TypeVar, cast
 
 K = TypeVar("K", bound=Hashable)
@@ -19,9 +20,10 @@ def check_timeout(timeout: float | None) -> float | None:
     """
     if timeout is None:
         return None
-    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
-        raise TypeError(f"timeout must be a number or None, not {type(timeout).__name__}")
-    if math.isnan(timeout) or timeout < 0:
+    if isinstance(timeout, bool) or not isinstance(timeout, numbers.Real):
+        raise TypeError(f"timeout must be a real number or None, not {type(timeout).__name__}")
+    # Compare before converting: a huge int would overflow float(), and NaN != NaN.
+    if timeout != timeout or timeout < 0:
         raise ValueError("timeout must be None or a non-negative number")
     if timeout > threading.TIMEOUT_MAX:
         return None
@@ -45,10 +47,16 @@ def ordered(keys: Iterable[K]) -> list[K]:
     if isinstance(keys, (str, bytes)):
         raise TypeError("keys must be a collection of keys, not a single str or bytes")
     unique = list(dict.fromkeys(keys))
+    message = "lock_many needs keys with a total order (all str, all int, ...; no NaN or sets)"
     try:
-        return cast("list[K]", sorted(cast("list[Any]", unique)))
+        result = sorted(cast("list[Any]", unique))
+        # sorted() quietly keeps the input order for a partial order (sets, NaN), which
+        # would let two callers take the same keys in opposite orders and deadlock.
+        if not all(a < b for a, b in pairwise(result)):
+            raise TypeError(message)
     except TypeError as error:
-        raise TypeError("lock_many needs keys that can be sorted against each other") from error
+        raise TypeError(message) from error
+    return cast("list[K]", result)
 
 
 def timeout_error(what: str, timeout: float | None) -> TimeoutError:

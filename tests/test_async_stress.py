@@ -6,7 +6,6 @@ import asyncio
 import random
 
 from keyedlock import AsyncKeyedLock
-from keyedlock._async import _abandon
 
 TASKS = 300
 KEYS = 5
@@ -68,30 +67,21 @@ def test_invariants_hold_under_timeouts_and_cancellation() -> None:
     asyncio.run(main())
 
 
-def test_an_abandoned_attempt_that_won_the_lock_releases_it() -> None:
+def test_a_timed_waiter_keeps_its_place_ahead_of_a_later_untimed_one() -> None:
     async def main() -> None:
-        lock = asyncio.Lock()
-        attempt = asyncio.ensure_future(lock.acquire())
-        await asyncio.sleep(0)
-        assert attempt.done() and lock.locked()
-        _abandon(attempt, lock)
-        await asyncio.sleep(0)
-        assert not lock.locked()
+        lock = AsyncKeyedLock()
+        order: list[str] = []
 
-    asyncio.run(main())
+        async def go(name: str, timeout: float | None) -> None:
+            async with lock.lock("k", timeout=timeout):
+                order.append(name)
 
-
-def test_an_abandoned_attempt_still_waiting_does_not_take_the_lock() -> None:
-    async def main() -> None:
-        lock = asyncio.Lock()
-        await lock.acquire()
-        attempt = asyncio.ensure_future(lock.acquire())
-        await asyncio.sleep(0)
-        _abandon(attempt, lock)
-        lock.release()
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        assert attempt.cancelled()
-        assert not lock.locked()
+        async with lock.lock("k"):
+            first = asyncio.create_task(go("timed-first", 5))
+            second = asyncio.create_task(go("untimed-second", None))
+            await asyncio.sleep(0)
+        await asyncio.gather(first, second)
+        assert order == ["timed-first", "untimed-second"]
+        assert lock.active_keys() == 0
 
     asyncio.run(main())

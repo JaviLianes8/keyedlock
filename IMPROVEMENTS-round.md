@@ -10,7 +10,7 @@ Progress:
 - [x] Contracts: stress tests, typing, README examples, installed wheel e2e
 - [x] Docs: README, CHANGELOG, docstrings, packaging metadata
 - [x] Gates: ruff format, ruff check, mypy --strict, pytest
-- [ ] Independent review findings fixed with regression tests
+- [x] Independent review findings fixed with regression tests
 - [ ] Pull request opened, guard clean
 
 ## Starting point
@@ -62,9 +62,8 @@ fixed pool). Reading it against the standard library documentation and real use:
 4. **`lock_many(keys)`.** Takes several keys in one sorted order (stripes in index
    order for `StripedLock`), deduplicated, under one shared timeout, and releases
    everything already taken if a later key fails. Rejects a bare `str` passed as keys.
-5. **`AsyncKeyedLock`.** Same contract on top of `asyncio.Lock`: fair per key,
-   cancellation never leaks the table or the lock, timeouts never leave an orphaned
-   acquisition holding the lock.
+5. **`AsyncKeyedLock`.** Same contract for coroutines: strictly first come, first served
+   per key, cancellation and timeouts never leak the table or the lock.
 6. **Stress contracts.** Dozens of threads over a handful of keys with mixed timeouts
    and exceptions: at most one holder per key at any instant, every successful entry
    counted, distinct keys observed running concurrently, table empty at the end. Same
@@ -84,3 +83,22 @@ fixed pool). Reading it against the standard library documentation and real use:
 - Bare `acquire(key)` / `release(key)` methods: the context managers pair them by
   construction, which is what keeps the reference count correct.
 - Fork safety (`os.register_at_fork`): a child process should build its own locks.
+
+## Review fixes
+
+- `lock_many` refuses keys without a total order. `sorted()` keeps the input order for
+  sets and NaN, so two callers could take the same keys in opposite orders and
+  deadlock; neighbours are now checked to be strictly increasing.
+- Timed async waiters keep their place in the queue. The first version waited through a
+  helper task that joined the queue one loop step late, so a later untimed waiter could
+  overtake it. The asyncio lock is now a small hand-off lock (`_fifo.py`): one queue for
+  every waiter, the lock passed straight to the oldest one, timeouts as timers on the
+  waiter's own future, no helper task.
+- A huge integer timeout (`10**400`) means no limit instead of raising `OverflowError`;
+  any real number (`Fraction`, NumPy scalars) is accepted.
+- A key whose hash changes while held is still removed from the table, and the body's
+  own exception is the one that surfaces.
+- An interrupt landing right after the primitive is taken releases it again. The window
+  between `acquire()` returning and the next statement remains, exactly as for a plain
+  `with threading.Lock():` block.
+- `lock_many` timeout messages name the caller's timeout, not the budget left over.

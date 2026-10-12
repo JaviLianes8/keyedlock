@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import threading
-from typing import Protocol
+from collections.abc import Hashable
+from typing import Protocol, TypeVar
+
+E = TypeVar("E")
 
 
 class LockPrimitive(Protocol):
@@ -39,8 +42,13 @@ class Slot:
             )
         if not self.lock.acquire(True, -1 if timeout is None else timeout):
             return False
-        if not self.reentrant:
-            self.owner = me
+        try:
+            if not self.reentrant:
+                self.owner = me
+        except BaseException:
+            # Interrupted right after taking the lock: nobody would ever release it.
+            self.lock.release()
+            raise
         return True
 
     def release(self) -> None:
@@ -48,3 +56,18 @@ class Slot:
         if not self.reentrant:
             self.owner = None
         self.lock.release()
+
+
+def drop_entry(entries: dict[Hashable, E], key: Hashable, entry: E) -> None:
+    """Remove ``entry`` from the table, even if ``key`` changed its hash while held."""
+    try:
+        if entries.get(key) is entry:
+            del entries[key]
+            return
+    except Exception:
+        pass
+    # The key no longer finds its own entry (a mutated key, an __eq__ that raises):
+    # rebuild the table without it rather than leave a dead entry behind for ever.
+    kept = {k: e for k, e in entries.items() if e is not entry}
+    entries.clear()
+    entries.update(kept)

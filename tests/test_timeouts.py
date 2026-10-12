@@ -7,6 +7,8 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
+from decimal import Decimal
+from fractions import Fraction
 
 import pytest
 from _helpers import run_threads
@@ -79,13 +81,21 @@ def test_negative_or_nan_timeouts_are_rejected(locker: Locker, bad: float) -> No
         pass
 
 
-@pytest.mark.parametrize("bad", ["1", True, [1]])
+@pytest.mark.parametrize("ok", [Fraction(1, 2), 0, 2])
+def test_any_real_number_is_a_timeout(locker: Locker, ok: float) -> None:
+    with locker("k", timeout=ok):
+        pass
+
+
+@pytest.mark.parametrize("bad", ["1", True, [1], 1j, Decimal("1")])
 def test_non_numeric_timeouts_are_rejected(locker: Locker, bad: object) -> None:
     with pytest.raises(TypeError), locker("k", timeout=bad):
         pass
 
 
-@pytest.mark.parametrize("huge", [math.inf, threading.TIMEOUT_MAX * 10])
+@pytest.mark.parametrize(
+    "huge", [math.inf, threading.TIMEOUT_MAX * 10, pytest.param(10**400, id="huge-int")]
+)
 def test_timeouts_beyond_the_platform_limit_wait_without_limit(locker: Locker, huge: float) -> None:
     with locker("k", timeout=huge):
         pass

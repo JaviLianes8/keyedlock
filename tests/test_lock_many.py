@@ -127,7 +127,7 @@ def test_a_bare_string_is_rejected(keys: str | bytes) -> None:
 
 def test_keys_that_cannot_be_sorted_are_rejected_before_locking() -> None:
     lock = KeyedLock()
-    with pytest.raises(TypeError, match="sorted"), lock.lock_many(["a", 1]):
+    with pytest.raises(TypeError, match="total order"), lock.lock_many(["a", 1]):
         pass
     assert lock.active_keys() == 0
 
@@ -155,3 +155,36 @@ def test_later_keys_get_only_what_is_left_of_the_budget() -> None:
     for thread in holders:
         thread.join(5)
     assert lock.active_keys() == 0
+
+
+@pytest.mark.parametrize(
+    "keys",
+    [[frozenset({1}), frozenset({2})], [float("nan"), float("nan")], [1.0, float("nan")]],
+)
+def test_keys_without_a_total_order_are_rejected(keys: list[object]) -> None:
+    # sorted() keeps the input order here, so two callers could lock in opposite orders.
+    lock = KeyedLock()
+    with pytest.raises(TypeError, match="total order"), lock.lock_many(keys):
+        pass
+    assert lock.active_keys() == 0
+
+
+def test_the_timeout_message_names_the_callers_timeout() -> None:
+    lock = KeyedLock()
+    holding, release = threading.Event(), threading.Event()
+
+    def hold() -> None:
+        with lock.lock("b"):
+            holding.set()
+            release.wait(10)
+
+    thread = threading.Thread(target=hold)
+    thread.start()
+    assert holding.wait(5)
+    with (
+        pytest.raises(TimeoutError, match=r"'b' within 0\.05 seconds"),
+        lock.lock_many(["a", "b"], timeout=0.05),
+    ):
+        pass
+    release.set()
+    thread.join(5)

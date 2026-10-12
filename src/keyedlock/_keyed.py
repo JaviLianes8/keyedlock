@@ -6,7 +6,7 @@ import threading
 from collections.abc import Hashable, Iterable, Iterator
 from contextlib import ExitStack, contextmanager
 
-from ._primitive import Slot
+from ._primitive import Slot, drop_entry
 from ._timing import Deadline, check_timeout, ordered, timeout_error
 
 
@@ -52,7 +52,24 @@ class KeyedLock:
         with self._guard:
             entry.refs -= 1
             if entry.refs == 0:
-                del self._entries[key]
+                drop_entry(self._entries, key, entry)
+
+    @contextmanager
+    def _hold(self, key: Hashable, limit: float | None, shown: float | None) -> Iterator[None]:
+        entry = self._checkout(key)
+        held = False
+        try:
+            held = entry.acquire(limit)
+            if not held:
+                raise timeout_error(f"key {key!r}", shown)
+            yield
+        finally:
+            # Runs on success, timeout, re-entry and an interrupted wait alike.
+            try:
+                if held:
+                    entry.release()
+            finally:
+                self._checkin(key, entry)
 
     @contextmanager
     def lock(self, key: Hashable, *, timeout: float | None = None) -> Iterator[None]:
@@ -62,23 +79,8 @@ class KeyedLock:
         seconds; ``TimeoutError`` is raised when it runs out.
         """
         limit = check_timeout(timeout)
-        entry = self._checkout(key)
-        try:
-            acquired = entry.acquire(limit)
-        except BaseException:
-            # Interrupted while waiting (or a re-entry): give the reference back.
-            self._checkin(key, entry)
-            raise
-        if not acquired:
-            self._checkin(key, entry)
-            raise timeout_error(f"key {key!r}", limit)
-        try:
+        with self._hold(key, limit, limit):
             yield
-        finally:
-            try:
-                entry.release()
-            finally:
-                self._checkin(key, entry)
 
     @contextmanager
     def lock_many(
@@ -87,13 +89,15 @@ class KeyedLock:
         """Hold the locks for every key in ``keys`` for the duration of the ``with`` block.
 
         Keys are deduplicated and taken in sorted order, so two callers locking the same
-        keys can never deadlock each other; they must therefore be mutually sortable.
-        ``timeout`` bounds the whole acquisition. On failure nothing stays locked.
+        keys can never deadlock each other; they therefore need a total order (all
+        ``str``, all ``int``, ...). ``timeout`` bounds the whole acquisition. On failure
+        nothing stays locked.
         """
-        deadline = Deadline(check_timeout(timeout))
+        limit = check_timeout(timeout)
+        deadline = Deadline(limit)
         with ExitStack() as stack:
             for key in ordered(keys):
-                stack.enter_context(self.lock(key, timeout=deadline.remaining()))
+                stack.enter_context(self._hold(key, deadline.remaining(), limit))
             yield
 
     def active_keys(self) -> int:

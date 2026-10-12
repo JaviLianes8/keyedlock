@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Iterable, Iterator
+from collections.abc import Hashable, Iterable, Iterator
 from contextlib import ExitStack, contextmanager
 
 from ._primitive import Slot
 from ._timing import Deadline, check_timeout, ordered, timeout_error
+
+_NO_KEY = object()
 
 
 class StripedLock:
@@ -39,10 +41,13 @@ class StripedLock:
         return hash(key) % len(self._slots)
 
     @contextmanager
-    def _hold(self, index: int, limit: float | None, what: Callable[[], str]) -> Iterator[None]:
+    def _hold(
+        self, index: int, limit: float | None, shown: float | None, key: object = _NO_KEY
+    ) -> Iterator[None]:
         slot = self._slots[index]
         if not slot.acquire(limit):
-            raise timeout_error(what(), limit)
+            what = f"stripe {index}" if key is _NO_KEY else f"key {key!r}"
+            raise timeout_error(what, shown)
         try:
             yield
         finally:
@@ -56,7 +61,7 @@ class StripedLock:
         seconds; ``TimeoutError`` is raised when it runs out.
         """
         limit = check_timeout(timeout)
-        with self._hold(self._stripe_for(key), limit, lambda: f"key {key!r}"):
+        with self._hold(self._stripe_for(key), limit, limit, key):
             yield
 
     @contextmanager
@@ -71,10 +76,10 @@ class StripedLock:
         """
         if isinstance(keys, (str, bytes)):
             raise TypeError("keys must be a collection of keys, not a single str or bytes")
-        deadline = Deadline(check_timeout(timeout))
+        limit = check_timeout(timeout)
+        deadline = Deadline(limit)
         stripes = ordered(self._stripe_for(key) for key in keys)
         with ExitStack() as stack:
             for index in stripes:
-                what = f"stripe {index}".__str__
-                stack.enter_context(self._hold(index, deadline.remaining(), what))
+                stack.enter_context(self._hold(index, deadline.remaining(), limit))
             yield

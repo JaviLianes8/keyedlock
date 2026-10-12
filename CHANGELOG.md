@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Added
+
+- `timeout` on every `lock`: `None` waits for ever, `0` tries once, a number of seconds
+  waits at most that long, then `TimeoutError`. Negative or NaN values raise `ValueError`,
+  non-numbers `TypeError`; values above `threading.TIMEOUT_MAX` mean no limit.
+- `lock_many(keys, *, timeout=None)` on `KeyedLock` and `StripedLock`: takes several keys
+  (or stripes) once each in one global order, so callers cannot deadlock each other, and
+  releases what it took if a later key fails.
+- `AsyncKeyedLock`: the asyncio counterpart, fair per key, safe under cancellation and
+  timeouts, with `lock`, `lock_many` and `active_keys`.
+
+### Changed
+
+- Re-entering a key (or, for `StripedLock`, a stripe) already held by the same thread
+  raises `RuntimeError` instead of deadlocking, unless the lock is `reentrant=True`.
+- `StripedLock` rejects a non-integer `stripes` with `TypeError`.
+
+### Fixed
+
+- An exception raised while waiting for a key (for example `KeyboardInterrupt`) no longer
+  leaves the key in the table for ever.
+
 ## [0.1.0]
 
 - First release.

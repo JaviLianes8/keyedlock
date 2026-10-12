@@ -2,14 +2,14 @@
 
 Progress:
 - [x] Brainstorm ranked improvements (this file)
-- [ ] Interrupted acquisitions never leak a table entry
-- [ ] Timeouts on every lock, `TimeoutError` when they expire
-- [ ] Re-entry on a non-reentrant key or stripe raises instead of deadlocking
-- [ ] `lock_many`: several keys in a fixed order, no lock-order deadlocks
-- [ ] `AsyncKeyedLock`: asyncio variant, fair, cancellation safe
-- [ ] Contracts: stress tests, typing, README examples, installed wheel e2e
-- [ ] Docs: README, CHANGELOG, docstrings, packaging metadata
-- [ ] Gates: ruff format, ruff check, mypy --strict, pytest
+- [x] Interrupted acquisitions never leak a table entry
+- [x] Timeouts on every lock, `TimeoutError` when they expire
+- [x] Re-entry on a non-reentrant key or stripe raises instead of deadlocking
+- [x] `lock_many`: several keys in a fixed order, no lock-order deadlocks
+- [x] `AsyncKeyedLock`: asyncio variant, fair, cancellation safe
+- [x] Contracts: stress tests, typing, README examples, installed wheel e2e
+- [x] Docs: README, CHANGELOG, docstrings, packaging metadata
+- [x] Gates: ruff format, ruff check, mypy --strict, pytest
 - [ ] Independent review findings fixed with regression tests
 - [ ] Pull request opened, guard clean
 

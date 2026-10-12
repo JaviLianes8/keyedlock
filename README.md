@@ -19,6 +19,7 @@ from keyedlock import KeyedLock
 
 locks = KeyedLock()
 
+
 def charge(user_id: str) -> None:
     with locks.lock(user_id):
         balance = read_balance(user_id)

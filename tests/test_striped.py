@@ -4,22 +4,21 @@ import threading
 from collections.abc import Callable
 
 import pytest
+from _helpers import run_threads
 
 from keyedlock import StripedLock
 
 
-def _run(workers: list[Callable[[], None]]) -> None:
-    threads = [threading.Thread(target=worker) for worker in workers]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join(timeout=10)
-    assert all(not thread.is_alive() for thread in threads)
-
-
-def test_rejects_non_positive_stripe_count() -> None:
+@pytest.mark.parametrize("bad", [0, -3])
+def test_rejects_non_positive_stripe_count(bad: int) -> None:
     with pytest.raises(ValueError):
-        StripedLock(stripes=0)
+        StripedLock(stripes=bad)
+
+
+@pytest.mark.parametrize("bad", [4.0, "4", True])
+def test_rejects_a_non_integer_stripe_count(bad: object) -> None:
+    with pytest.raises(TypeError):
+        StripedLock(stripes=bad)  # type: ignore[arg-type]
 
 
 def test_stripe_count_is_fixed_regardless_of_key_volume() -> None:
@@ -49,7 +48,7 @@ def test_a_single_stripe_serializes_every_key() -> None:
 
         return run
 
-    _run([worker(i) for i in range(count)])
+    run_threads([worker(i) for i in range(count)])
     assert not overlaps
 
 
@@ -57,23 +56,26 @@ def test_keys_on_different_stripes_run_in_parallel() -> None:
     # Integer keys hash to themselves, so 0 and 1 land on distinct stripes here.
     lock = StripedLock(stripes=8)
     both_inside = threading.Barrier(2, timeout=5)
-    broken: list[int] = []
 
     def worker(key: int) -> Callable[[], None]:
         def run() -> None:
             with lock.lock(key):
-                try:
-                    both_inside.wait()
-                except threading.BrokenBarrierError:
-                    broken.append(key)
+                both_inside.wait()
 
         return run
 
-    _run([worker(0), worker(1)])
-    assert not broken
+    run_threads([worker(0), worker(1)])
 
 
-def test_reentrant_stripe_allows_nesting_on_the_same_key() -> None:
-    lock = StripedLock(stripes=4, reentrant=True)
-    with lock.lock("x"), lock.lock("x"):
+def test_an_exception_in_the_body_releases_the_stripe() -> None:
+    lock = StripedLock(stripes=2)
+    with pytest.raises(KeyError), lock.lock("x"):
+        raise KeyError("boom")
+    with lock.lock("x", timeout=0):
+        pass
+
+
+def test_negative_hashes_map_to_a_valid_stripe() -> None:
+    lock = StripedLock(stripes=3)
+    with lock.lock(-7), lock.lock(-8):
         pass

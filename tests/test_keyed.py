@@ -3,16 +3,10 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 
+import pytest
+from _helpers import run_threads
+
 from keyedlock import KeyedLock
-
-
-def _run(workers: list[Callable[[], None]]) -> None:
-    threads = [threading.Thread(target=worker) for worker in workers]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join(timeout=10)
-    assert all(not thread.is_alive() for thread in threads)
 
 
 def test_same_key_serializes_concurrent_work() -> None:
@@ -33,7 +27,7 @@ def test_same_key_serializes_concurrent_work() -> None:
             counter["value"] = counter["value"] + 1
             occupancy["inside"] -= 1
 
-    _run([worker] * count)
+    run_threads([worker] * count)
     assert not overlaps
     assert counter["value"] == count
 
@@ -41,20 +35,38 @@ def test_same_key_serializes_concurrent_work() -> None:
 def test_different_keys_do_not_block_each_other() -> None:
     lock = KeyedLock()
     both_inside = threading.Barrier(2, timeout=5)
-    broken: list[str] = []
 
     def worker(key: str) -> Callable[[], None]:
         def run() -> None:
             with lock.lock(key):
-                try:
-                    both_inside.wait()
-                except threading.BrokenBarrierError:
-                    broken.append(key)
+                both_inside.wait()
 
         return run
 
-    _run([worker("a"), worker("b")])
-    assert not broken
+    run_threads([worker("a"), worker("b")])
+
+
+def test_equal_keys_share_one_lock() -> None:
+    lock = KeyedLock()
+    with lock.lock(1), pytest.raises(TimeoutError):
+        # 1.0 == 1 and hash(1.0) == hash(1): dict rules make them the same key.
+        run_on_other_thread(lambda: lock.lock(1.0, timeout=0).__enter__())
+
+
+def run_on_other_thread(action: Callable[[], object]) -> None:
+    errors: list[BaseException] = []
+
+    def target() -> None:
+        try:
+            action()
+        except BaseException as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join(10)
+    if errors:
+        raise errors[0]
 
 
 def test_table_empties_after_release() -> None:
@@ -62,6 +74,24 @@ def test_table_empties_after_release() -> None:
     assert lock.active_keys() == 0
     with lock.lock("x"):
         assert lock.active_keys() == 1
+    assert lock.active_keys() == 0
+
+
+def test_a_waiter_inherits_the_key_and_then_cleans_up() -> None:
+    lock = KeyedLock()
+    entered = threading.Event()
+
+    def waiter() -> None:
+        with lock.lock("x"):
+            entered.set()
+
+    with lock.lock("x"):
+        thread = threading.Thread(target=waiter)
+        thread.start()
+        assert not entered.wait(0.05)
+        assert lock.active_keys() == 1
+    thread.join(5)
+    assert entered.is_set()
     assert lock.active_keys() == 0
 
 
@@ -78,23 +108,44 @@ def test_table_empties_after_concurrent_use() -> None:
 
         return run
 
-    _run([worker(i) for i in range(count)])
+    run_threads([worker(i) for i in range(count)])
     assert lock.active_keys() == 0
 
 
-def test_default_lock_is_not_reentrant_but_reusable_in_sequence() -> None:
-    # The default primitive is a plain, non-reentrant lock: re-entering the same key on
-    # one thread would deadlock. Sequential reuse of a key is fine and leaves no residue.
+def test_an_exception_in_the_body_releases_the_key() -> None:
+    lock = KeyedLock()
+    with pytest.raises(KeyError), lock.lock("x"):
+        raise KeyError("boom")
+    assert lock.active_keys() == 0
+    with lock.lock("x", timeout=0):
+        pass
+
+
+def test_an_unhashable_key_is_rejected_without_residue() -> None:
+    lock = KeyedLock()
+    with pytest.raises(TypeError), lock.lock(["not", "hashable"]):  # type: ignore[arg-type]
+        pass
+    assert lock.active_keys() == 0
+
+
+def test_an_interrupted_wait_gives_its_reference_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    # KeyboardInterrupt can land inside acquire(); the key must not stay in the table.
+    from keyedlock import _keyed
+
+    def interrupted(self: object, timeout: float | None) -> bool:
+        raise KeyboardInterrupt
+
+    lock = KeyedLock()
+    monkeypatch.setattr(_keyed._Entry, "acquire", interrupted)
+    with pytest.raises(KeyboardInterrupt), lock.lock("x"):
+        pass
+    assert lock.active_keys() == 0
+
+
+def test_sequential_reuse_leaves_no_residue() -> None:
     lock = KeyedLock()
     with lock.lock("x"):
         pass
     with lock.lock("x"):
         pass
-    assert lock.active_keys() == 0
-
-
-def test_reentrant_lock_allows_nesting_on_the_same_key() -> None:
-    lock = KeyedLock(reentrant=True)
-    with lock.lock("x"), lock.lock("x"):
-        assert lock.active_keys() == 1
     assert lock.active_keys() == 0

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from fractions import Fraction
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
+from _timeout_values import ZeroFloatInt
 
 from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock, _primitive, _timing
 
@@ -38,11 +41,20 @@ def test_striped_group_spends_one_budget(monkeypatch: pytest.MonkeyPatch) -> Non
 
 @pytest.mark.parametrize("factory", [KeyedLock, StripedLock])
 @pytest.mark.parametrize("group", [False, True])
-@pytest.mark.parametrize("huge", [float("inf"), threading.TIMEOUT_MAX * 2, 10**400])
-def test_huge_timeout_waits_for_threaded_handoff(
+@pytest.mark.parametrize(
+    "value",
+    [
+        float("inf"),
+        threading.TIMEOUT_MAX * 2,
+        10**400,
+        cast(float, Fraction(10**400)),
+        ZeroFloatInt(2),
+    ],
+)
+def test_numeric_timeout_waits_for_threaded_handoff(
     factory: type[KeyedLock | StripedLock],
     group: bool,
-    huge: float,
+    value: float,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     locks = factory()
@@ -62,7 +74,7 @@ def test_huge_timeout_waits_for_threaded_handoff(
         waiter_id.append(threading.get_ident())
         try:
             manager = (
-                locks.lock_many([0, 1], timeout=huge) if group else locks.lock(0, timeout=huge)
+                locks.lock_many([0, 1], timeout=value) if group else locks.lock(0, timeout=value)
             )
             with manager:
                 outcomes.append("acquired")
@@ -75,7 +87,11 @@ def test_huge_timeout_waits_for_threaded_handoff(
         with locks.lock(0):
             thread.start()
             assert attempting.wait(5)
-            assert limits == [None]
+            if isinstance(value, ZeroFloatInt):
+                assert len(limits) == 1
+                assert limits[0] is not None and 0 < limits[0] <= 2
+            else:
+                assert limits == [None]
     finally:
         thread.join(5)
     assert not thread.is_alive()
@@ -85,14 +101,23 @@ def test_huge_timeout_waits_for_threaded_handoff(
 
 
 @pytest.mark.parametrize("group", [False, True])
-@pytest.mark.parametrize("huge", [float("inf"), threading.TIMEOUT_MAX * 2, 10**400])
-def test_huge_timeout_waits_for_async_handoff(group: bool, huge: float) -> None:
+@pytest.mark.parametrize(
+    "value",
+    [
+        float("inf"),
+        threading.TIMEOUT_MAX * 2,
+        10**400,
+        cast(float, Fraction(10**400)),
+        ZeroFloatInt(2),
+    ],
+)
+def test_numeric_timeout_waits_for_async_handoff(group: bool, value: float) -> None:
     async def run() -> None:
         locks = AsyncKeyedLock()
 
         async def wait() -> str:
             manager = (
-                locks.lock_many([0, 1], timeout=huge) if group else locks.lock(0, timeout=huge)
+                locks.lock_many([0, 1], timeout=value) if group else locks.lock(0, timeout=value)
             )
             async with manager:
                 return "acquired"

@@ -26,25 +26,31 @@ def check_timeout(timeout: float | None) -> float | None:
         return None
     if isinstance(timeout, bool) or not isinstance(timeout, numbers.Real):
         raise TypeError("timeout must be a real number or None (not bool)")
-    # Integer subclasses must not override the sign or magnitude used below.
-    if isinstance(timeout, int):
-        integer = int.__index__(timeout)
-        if integer < 0:
-            raise ValueError("timeout must be None or a non-negative number")
-        if integer > threading.TIMEOUT_MAX:
-            return None
-        value = float(integer)
-    elif isinstance(timeout, numbers.Rational):
-        numerator = operator.index(timeout.numerator)
-        denominator = operator.index(timeout.denominator)
-        if denominator == 0 or (numerator != 0 and (numerator < 0) != (denominator < 0)):
-            raise ValueError("timeout must be None or a non-negative number")
-        try:
-            value = numerator / denominator
-        except OverflowError:
-            return None
-    else:
-        value = float(timeout)
+    try:
+        # Integer subclasses must not override the sign or magnitude used below.
+        if isinstance(timeout, int):
+            integer = int.__index__(timeout)
+            if integer < 0:
+                raise ValueError("timeout must be None or a non-negative number")
+            if integer > threading.TIMEOUT_MAX:
+                return None
+            value = float(integer)
+        elif isinstance(timeout, numbers.Rational):
+            numerator = operator.index(timeout.numerator)
+            denominator = operator.index(timeout.denominator)
+            if denominator == 0 or (numerator != 0 and (numerator < 0) != (denominator < 0)):
+                raise ValueError("timeout must be None or a non-negative number")
+            try:
+                value = numerator / denominator
+            except OverflowError:
+                return None
+        else:
+            value = float(timeout)
+    except TypeError as error:
+        # A Python conversion method adds a frame; preserve its explicit failure.
+        if error.__traceback__ is not None and error.__traceback__.tb_next is not None:
+            raise
+        raise TypeError("timeout must be a real number or None (not bool)") from None
     if value != value or value < 0:
         raise ValueError("timeout must be None or a non-negative number")
     if value > threading.TIMEOUT_MAX:

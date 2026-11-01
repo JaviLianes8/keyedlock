@@ -93,9 +93,9 @@ Validation uses normalized numeric values, not overloaded comparisons: integer
 subclasses use their underlying integer, rationals use their integer numerator and
 denominator, and other real numbers use their float conversion. Negative rationals
 are rejected even when conversion would round to negative zero.
-Above `threading.TIMEOUT_MAX`, including infinity and enormous positive integers,
-the timeout means no limit. This is a library policy, not the standard library's
-overflow behavior.
+Above `threading.TIMEOUT_MAX`, including infinity and enormous positive integers
+or fractions, the timeout means no limit. The maximum itself remains a finite
+budget. This is a library policy, not the standard library's overflow behavior.
 
 For a group, one monotonic deadline is created before consuming the iterable and
 shared by all acquisitions. Each acquisition gets the remaining budget, floored at
@@ -114,11 +114,13 @@ Library-generated messages never format a key or caller-controlled type name.
 Timeout messages include the normalized timeout in seconds; striped errors also
 include a stripe index. Built-in hash rejection, including nested unhashable members
 and writable memoryviews, becomes `TypeError("key must be hashable")`. A non-iterable
-collection becomes `TypeError("keys must be an iterable of keys")`. Normalized
+collection becomes `TypeError("keys must be an iterable of keys")`. Built-in failures
+converting a real timeout to float or its rational numerator/denominator to integers
+become `TypeError("timeout must be a real number or None (not bool)")`. Normalized
 errors suppress their original displayed chains. Explicit exceptions from Python
-hash/iterator methods and the body retain their identity and messages; comparison
-`TypeError`s follow the normalization rule above. Prefer catching the documented
-error families to matching text.
+hash/iterator methods, numeric conversion methods/properties and the body retain
+their identity and messages; comparison `TypeError`s follow the normalization rule
+above. Prefer catching the documented error families to matching text.
 
 Threaded locks make no FIFO promise, matching `threading.Lock`.
 Async waiters on one key are FIFO, including waiters with positive timeouts.

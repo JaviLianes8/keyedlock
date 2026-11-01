@@ -41,6 +41,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Malformed float conversions and rational numerator/denominator conversions now
+  raise a fixed `TypeError` without displaying caller-controlled type names or the
+  original exception chain. Explicit exceptions from Python conversion methods
+  retain their identity and message.
 - Async waiter handoff and cancellation remove queue entries in constant time instead
   of scanning the remaining queue. FIFO order and cancellation behavior are unchanged.
 
@@ -50,6 +54,10 @@ All notable changes to this project are documented here. The format follows
   standard-library differential tests and expanded error and contract coverage.
 - Contracts for striped group deadlines, contended huge-timeout handoff, and striped
   and async group body-exception identity, propagation and cleanup.
+- Exact tuple/frozenset structure boundaries, stored-member validation for subclasses,
+  iterator/comparison exception identity, bytearray collections and identical NaN keys.
+- Acquisition-budget contracts for integer subclasses, fractional seconds, enormous
+  positive fractions and the platform timeout boundary, including contended handoff.
 
 ## [0.2.0]
 

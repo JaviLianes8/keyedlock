@@ -150,7 +150,10 @@ def test_later_keys_get_only_what_is_left_of_the_budget() -> None:
     for thread in holders:
         thread.start()
     ready.wait()
-    with pytest.raises(TimeoutError, match="'b'"), lock.lock_many(["a", "b"], timeout=0.6):
+    with (
+        pytest.raises(TimeoutError, match="could not lock key"),
+        lock.lock_many(["a", "b"], timeout=0.6),
+    ):
         pass
     for thread in holders:
         thread.join(5)
@@ -182,7 +185,7 @@ def test_the_timeout_message_names_the_callers_timeout() -> None:
     thread.start()
     assert holding.wait(5)
     with (
-        pytest.raises(TimeoutError, match=r"'b' within 0\.05 seconds"),
+        pytest.raises(TimeoutError, match=r"key within 0\.05 seconds"),
         lock.lock_many(["a", "b"], timeout=0.05),
     ):
         pass

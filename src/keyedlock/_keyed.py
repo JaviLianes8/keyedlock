@@ -6,7 +6,8 @@ import threading
 from collections.abc import Hashable, Iterable, Iterator
 from contextlib import ExitStack, contextmanager
 
-from ._primitive import Slot, drop_entry
+from ._primitive import Slot
+from ._table import KeyTable
 from ._timing import Deadline, check_timeout, ordered, timeout_error
 
 
@@ -32,19 +33,26 @@ class KeyedLock:
     nesting on the same key. Keys follow ``dict`` rules: ``1``, ``1.0`` and ``True`` are
     the same key. The order in which waiters are woken is not defined, as for
     ``threading.Lock``.
+
+    >>> from keyedlock import KeyedLock
+    >>> locks = KeyedLock(reentrant=True)
+    >>> with locks.lock("job"), locks.lock("job"):
+    ...     print(locks.active_keys())
+    1
+    >>> locks.active_keys()
+    0
     """
 
     def __init__(self, *, reentrant: bool = False) -> None:
+        if not isinstance(reentrant, bool):
+            raise TypeError("reentrant must be a bool")
         self._reentrant = reentrant
         self._guard = threading.Lock()
-        self._entries: dict[Hashable, _Entry] = {}
+        self._entries: KeyTable[Hashable, _Entry] = KeyTable()
 
     def _checkout(self, key: Hashable) -> _Entry:
         with self._guard:
-            entry = self._entries.get(key)
-            if entry is None:
-                entry = _Entry(self._reentrant)
-                self._entries[key] = entry
+            entry = self._entries.intern(key, lambda _: _Entry(self._reentrant))
             entry.refs += 1
         return entry
 
@@ -52,7 +60,7 @@ class KeyedLock:
         with self._guard:
             entry.refs -= 1
             if entry.refs == 0:
-                drop_entry(self._entries, key, entry)
+                self._entries.drop(entry)
 
     @contextmanager
     def _hold(self, key: Hashable, limit: float | None, shown: float | None) -> Iterator[None]:
@@ -61,7 +69,7 @@ class KeyedLock:
         try:
             held = entry.acquire(limit)
             if not held:
-                raise timeout_error(f"key {key!r}", shown)
+                raise timeout_error("key", shown)
             yield
         finally:
             # Runs on success, timeout, re-entry and an interrupted wait alike.
@@ -77,6 +85,11 @@ class KeyedLock:
 
         ``timeout`` is ``None`` to wait for ever, ``0`` to try once, or a number of
         seconds; ``TimeoutError`` is raised when it runs out.
+
+        >>> from keyedlock import KeyedLock
+        >>> with KeyedLock().lock("job", timeout=0) as held:
+        ...     print(held)
+        None
         """
         limit = check_timeout(timeout)
         with self._hold(key, limit, limit):
@@ -88,10 +101,16 @@ class KeyedLock:
     ) -> Iterator[None]:
         """Hold the locks for every key in ``keys`` for the duration of the ``with`` block.
 
-        Keys are deduplicated and taken in sorted order, so two callers locking the same
-        keys can never deadlock each other; they therefore need a total order (all
-        ``str``, all ``int``, ...). ``timeout`` bounds the whole acquisition. On failure
-        nothing stays locked.
+        Keys are deduplicated and taken in sorted order, preventing cycles between
+        unnested groups on this instance. They need a total order (all ``str``, all
+        ``int``, ...). ``timeout`` bounds acquisition waits, not the body or user key
+        operations. On failure nothing acquired by this call stays locked.
+
+        >>> from keyedlock import KeyedLock
+        >>> locks = KeyedLock()
+        >>> with locks.lock_many(["b", "a", "a"]):
+        ...     print(locks.active_keys())
+        2
         """
         limit = check_timeout(timeout)
         deadline = Deadline(limit)
@@ -101,6 +120,11 @@ class KeyedLock:
             yield
 
     def active_keys(self) -> int:
-        """Number of keys currently held or waited on. Zero when fully idle."""
+        """Number of keys currently held or waited on. Zero when fully idle.
+
+        >>> from keyedlock import KeyedLock
+        >>> KeyedLock().active_keys()
+        0
+        """
         with self._guard:
             return len(self._entries)

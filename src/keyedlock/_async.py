@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator, Hashable, Iterable
 from contextlib import AsyncExitStack, asynccontextmanager
 
 from ._fifo import FifoLock
-from ._primitive import drop_entry
+from ._table import KeyTable
 from ._timing import Deadline, check_timeout, ordered, timeout_error
 
 
@@ -32,22 +32,31 @@ class AsyncKeyedLock:
 
     Locks are not reentrant: a task that takes a key it already holds gets
     ``RuntimeError`` instead of waiting on itself for ever.
+
+    >>> import asyncio
+    >>> from keyedlock import AsyncKeyedLock
+    >>> async def example():
+    ...     locks = AsyncKeyedLock()
+    ...     async with locks.lock("job"):
+    ...         print(locks.active_keys())
+    ...     print(locks.active_keys())
+    >>> asyncio.run(example())
+    1
+    0
     """
 
     def __init__(self) -> None:
-        self._entries: dict[Hashable, _AsyncEntry] = {}
+        self._entries: KeyTable[Hashable, _AsyncEntry] = KeyTable()
 
     def _checkout(self, key: Hashable) -> _AsyncEntry:
-        entry = self._entries.get(key)
-        if entry is None:
-            entry = self._entries[key] = _AsyncEntry()
+        entry = self._entries.intern(key, lambda _: _AsyncEntry())
         entry.refs += 1
         return entry
 
     def _checkin(self, key: Hashable, entry: _AsyncEntry) -> None:
         entry.refs -= 1
         if entry.refs == 0:
-            drop_entry(self._entries, key, entry)
+            self._entries.drop(entry)
 
     @asynccontextmanager
     async def _hold(
@@ -63,7 +72,7 @@ class AsyncKeyedLock:
                 )
             held = await entry.lock.acquire(limit)
             if not held:
-                raise timeout_error(f"key {key!r}", shown)
+                raise timeout_error("key", shown)
             entry.owner = task
             yield
         finally:
@@ -80,6 +89,14 @@ class AsyncKeyedLock:
 
         ``timeout`` is ``None`` to wait for ever, ``0`` to try once, or a number of
         seconds; ``TimeoutError`` is raised when it runs out.
+
+        >>> import asyncio
+        >>> from keyedlock import AsyncKeyedLock
+        >>> async def example():
+        ...     async with AsyncKeyedLock().lock("job", timeout=0) as held:
+        ...         print(held)
+        >>> asyncio.run(example())
+        None
         """
         limit = check_timeout(timeout)
         async with self._hold(key, limit, limit):
@@ -93,6 +110,15 @@ class AsyncKeyedLock:
 
         Keys are deduplicated and taken in sorted order, so they need a total order.
         ``timeout`` bounds the whole acquisition. On failure nothing stays locked.
+
+        >>> import asyncio
+        >>> from keyedlock import AsyncKeyedLock
+        >>> async def example():
+        ...     locks = AsyncKeyedLock()
+        ...     async with locks.lock_many(["b", "a", "a"]):
+        ...         print(locks.active_keys())
+        >>> asyncio.run(example())
+        2
         """
         limit = check_timeout(timeout)
         deadline = Deadline(limit)
@@ -102,5 +128,10 @@ class AsyncKeyedLock:
             yield
 
     def active_keys(self) -> int:
-        """Number of keys currently held or waited on. Zero when fully idle."""
+        """Number of keys currently held or waited on. Zero when fully idle.
+
+        >>> from keyedlock import AsyncKeyedLock
+        >>> AsyncKeyedLock().active_keys()
+        0
+        """
         return len(self._entries)

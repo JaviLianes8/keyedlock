@@ -5,10 +5,9 @@ from __future__ import annotations
 from collections.abc import Hashable, Iterable, Iterator
 from contextlib import ExitStack, contextmanager
 
+from ._keys import checked_hash, iter_keys
 from ._primitive import Slot
 from ._timing import Deadline, check_timeout, ordered, timeout_error
-
-_NO_KEY = object()
 
 
 class StripedLock:
@@ -23,31 +22,42 @@ class StripedLock:
     one thread may hit the same stripe twice. With the default non-reentrant stripes that
     raises ``RuntimeError`` instead of deadlocking; use :meth:`lock_many` to hold several
     keys at once.
+
+    >>> from keyedlock import StripedLock
+    >>> locks = StripedLock(1)
+    >>> with locks.lock_many(["a", "b"]):
+    ...     print(locks.stripes)
+    1
     """
 
     def __init__(self, stripes: int = 64, *, reentrant: bool = False) -> None:
+        if not isinstance(reentrant, bool):
+            raise TypeError("reentrant must be a bool")
         if isinstance(stripes, bool) or not isinstance(stripes, int):
-            raise TypeError(f"stripes must be an int, not {type(stripes).__name__}")
+            raise TypeError("stripes must be an int (not bool)")
+        stripes = int.__index__(stripes)
         if stripes < 1:
             raise ValueError("stripes must be at least 1")
         self._slots = [Slot(reentrant) for _ in range(stripes)]
 
     @property
     def stripes(self) -> int:
-        """The fixed number of underlying locks."""
+        """The fixed number of underlying locks.
+
+        >>> from keyedlock import StripedLock
+        >>> StripedLock().stripes
+        64
+        """
         return len(self._slots)
 
     def _stripe_for(self, key: Hashable) -> int:
-        return hash(key) % len(self._slots)
+        return checked_hash(key) % len(self._slots)
 
     @contextmanager
-    def _hold(
-        self, index: int, limit: float | None, shown: float | None, key: object = _NO_KEY
-    ) -> Iterator[None]:
+    def _hold(self, index: int, limit: float | None, shown: float | None) -> Iterator[None]:
         slot = self._slots[index]
         if not slot.acquire(limit):
-            what = f"stripe {index}" if key is _NO_KEY else f"key {key!r}"
-            raise timeout_error(what, shown)
+            raise timeout_error(f"stripe {index}", shown)
         try:
             yield
         finally:
@@ -59,9 +69,14 @@ class StripedLock:
 
         ``timeout`` is ``None`` to wait for ever, ``0`` to try once, or a number of
         seconds; ``TimeoutError`` is raised when it runs out.
+
+        >>> from keyedlock import StripedLock
+        >>> with StripedLock().lock("job", timeout=0) as held:
+        ...     print(held)
+        None
         """
         limit = check_timeout(timeout)
-        with self._hold(self._stripe_for(key), limit, limit, key):
+        with self._hold(self._stripe_for(key), limit, limit):
             yield
 
     @contextmanager
@@ -70,15 +85,18 @@ class StripedLock:
     ) -> Iterator[None]:
         """Hold the stripes backing every key in ``keys`` for the ``with`` block.
 
-        Each stripe is taken once, in index order, so callers can never deadlock each
-        other and keys sharing a stripe are fine. ``timeout`` bounds the whole
-        acquisition. On failure nothing stays locked.
+        Each stripe is taken once, in index order, preventing cycles between unnested
+        groups on this instance. Keys sharing a stripe are fine. ``timeout`` bounds
+        acquisition waits. On failure nothing acquired by this call stays locked.
+
+        >>> from keyedlock import StripedLock
+        >>> with StripedLock(1).lock_many(["a", "b", "a"]) as held:
+        ...     print(held)
+        None
         """
-        if isinstance(keys, (str, bytes)):
-            raise TypeError("keys must be a collection of keys, not a single str or bytes")
         limit = check_timeout(timeout)
         deadline = Deadline(limit)
-        stripes = ordered(self._stripe_for(key) for key in keys)
+        stripes = ordered(self._stripe_for(key) for key in iter_keys(keys))
         with ExitStack() as stack:
             for index in stripes:
                 stack.enter_context(self._hold(index, deadline.remaining(), limit))

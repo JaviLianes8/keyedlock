@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections import deque
+from collections import OrderedDict
 
 
 def _expire(future: asyncio.Future[bool]) -> None:
@@ -24,7 +24,7 @@ class FifoLock:
 
     def __init__(self) -> None:
         self._locked = False
-        self._waiters: deque[asyncio.Future[bool]] = deque()
+        self._waiters: OrderedDict[asyncio.Future[bool], None] = OrderedDict()
 
     def locked(self) -> bool:
         return self._locked
@@ -38,7 +38,7 @@ class FifoLock:
             return False
         loop = asyncio.get_running_loop()
         future: asyncio.Future[bool] = loop.create_future()
-        self._waiters.append(future)
+        self._waiters[future] = None
         timer = None if timeout is None else loop.call_later(timeout, _expire, future)
         try:
             return await future
@@ -50,15 +50,14 @@ class FifoLock:
         finally:
             if timer is not None:
                 timer.cancel()
-            if future in self._waiters:
-                self._waiters.remove(future)
+            self._waiters.pop(future, None)
 
     def release(self) -> None:
         """Hand the lock to the oldest live waiter, or free it when there is none."""
         if not self._locked:
             raise RuntimeError("release of an unlocked lock")
         while self._waiters:
-            future = self._waiters.popleft()
+            future, _ = self._waiters.popitem(last=False)
             if not future.done():
                 future.set_result(True)
                 return

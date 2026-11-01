@@ -47,7 +47,7 @@ def test_later_keys_get_only_what_is_left_of_the_budget() -> None:
 
         holders = [asyncio.create_task(hold("a", 0.4)), asyncio.create_task(hold("b", 0.8))]
         await asyncio.sleep(0)
-        with pytest.raises(TimeoutError, match="'b'"):
+        with pytest.raises(TimeoutError, match="could not lock key"):
             async with lock.lock_many(["a", "b"], timeout=0.6):
                 pass
         await asyncio.gather(*holders)

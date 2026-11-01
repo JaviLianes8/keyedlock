@@ -13,6 +13,7 @@ Progress:
 - [x] Independent review findings fixed with regression tests
 - [x] Pull request opened (#2), guard clean
 - [x] Certification QA round 1 corrections and regression contracts
+- [x] Certification QA round 3 rational timeout contracts
 
 ## Starting point
 

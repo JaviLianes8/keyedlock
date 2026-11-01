@@ -90,9 +90,13 @@ Booleans, complex numbers, strings and `Decimal` are rejected. Integers and
 `Fraction` values work at runtime; the static annotation is `float | None`, which
 also accepts integers in type checkers. NaN and negative values raise `ValueError`.
 Validation uses normalized numeric values, not overloaded comparisons: integer
-subclasses use their underlying integer, rationals use their integer numerator and
-denominator, and other real numbers use their float conversion. Negative rationals
-are rejected even when conversion would round to negative zero.
+subclasses use their underlying integer, rationals convert both numerator and
+denominator through `__index__`, and other real numbers use their float conversion.
+Rational components that are floats, strings or implement only `__int__` are rejected.
+A zero denominator raises `ValueError`. The ratio determines the sign: two negative
+components produce a valid positive timeout. Negative rationals are rejected even
+when conversion would round to negative zero. `Fraction(0, 1)` tries immediately,
+succeeding on free locks and raising `TimeoutError` on locks held elsewhere.
 Above `threading.TIMEOUT_MAX`, including infinity and enormous positive integers
 or fractions, the timeout means no limit. The maximum itself remains a finite
 budget. This is a library policy, not the standard library's overflow behavior.
@@ -105,7 +109,7 @@ work inside a successful context or user-defined iterable/key operations.
 | Exception | Condition |
 | --- | --- |
 | `TypeError` | Invalid option type, unhashable key, invalid collection or comparison `TypeError`. |
-| `ValueError` | Negative or NaN timeout; non-positive stripe count; key collision or structure limit. |
+| `ValueError` | Negative or NaN timeout, or zero rational denominator; non-positive stripe count; key collision or structure limit. |
 | `TimeoutError` | Acquisition could not complete within its remaining budget. |
 | `RuntimeError` | Same owner reenters a non-reentrant key or stripe. |
 | `asyncio.CancelledError` | The caller cancels the waiting or holding task. |

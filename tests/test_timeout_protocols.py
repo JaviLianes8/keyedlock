@@ -53,7 +53,9 @@ def test_builtin_numeric_conversion_errors_have_safe_tracebacks(
 
 @pytest.mark.parametrize("factory", [KeyedLock, StripedLock, AsyncKeyedLock])
 @pytest.mark.parametrize("group", [False, True])
-@pytest.mark.parametrize("kind", ["float", "numerator", "denominator", "numerator_index"])
+@pytest.mark.parametrize(
+    "kind", ["float", "numerator", "denominator", "numerator_index", "denominator_index"]
+)
 @pytest.mark.parametrize("error_type", [TypeError, ValueError])
 def test_explicit_numeric_conversion_exceptions_preserve_identity(
     factory: Factory, group: bool, kind: str, error_type: type[Exception]

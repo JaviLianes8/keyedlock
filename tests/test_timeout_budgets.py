@@ -10,7 +10,7 @@ from typing import cast
 
 import pytest
 from _acquisition import Factory, exercise
-from _timeout_values import ZeroFloatInt
+from _timeout_values import IndexComponent, ZeroFloatInt, rational_timeout
 
 from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock, _fifo, _primitive, _timing
 
@@ -23,6 +23,10 @@ from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock, _fifo, _primitive,
         pytest.param(ZeroFloatInt(2), 2.0, id="integer-subclass"),
         pytest.param(cast(float, Fraction(1, 2)), 0.5, id="fraction-half"),
         pytest.param(cast(float, Fraction(3, 2)), 1.5, id="fraction-three-halves"),
+        pytest.param(cast(float, Fraction(0, 1)), 0.0, id="fraction-zero"),
+        pytest.param(rational_timeout(-1, -2), 0.5, id="two-negative-components"),
+        pytest.param(rational_timeout(IndexComponent(1), 2), 0.5, id="numerator-index"),
+        pytest.param(rational_timeout(1, IndexComponent(2)), 0.5, id="denominator-index"),
         pytest.param(cast(float, Fraction(10**400, 1)), None, id="huge-fraction"),
         pytest.param(threading.TIMEOUT_MAX, threading.TIMEOUT_MAX, id="maximum"),
         pytest.param(int(threading.TIMEOUT_MAX), threading.TIMEOUT_MAX, id="integer-maximum"),

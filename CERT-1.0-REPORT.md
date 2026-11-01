@@ -2,7 +2,7 @@
 
 Preparation date: 2026-11-01. Validated source: `dbc21ba`.
 The preparation evidence below is historical. Current correction results are in
-the QA round 2 section at the end of this report.
+the QA round 3 section at the end of this report.
 Base: `main` at `4e54b50` (0.2.0). The interrupted branch's initial report at
 `11e48ff` remains in history. `https://pypi.org/pypi/keyedlock/json` returned HTTP 200 on 2026-11-01:
 0.2.0 was uploaded at 2026-11-01T02:11:21Z. Its earlier reported 404 is stale.
@@ -334,4 +334,55 @@ Validation:
 
 Detailed logs, mutation patches, commands and results are retained under
 `scratch/keyedlock-cert/fix-r2/`. No new independent QA lens PASS is claimed;
+re-review, merge and publication remain separate stages.
+
+## QA findings, round 3
+
+Date: 2026-11-01. Reviewed base: `e21c990a3d9f2c81892b5e7719f4aaa198f8e791`.
+Correction commit: `strengthen rational timeout contracts` (this commit).
+All six supplied findings E-17 through E-22 are addressed. No finding is disputed.
+These findings concern missing contracts: the existing runtime behavior is retained,
+as are public names, signatures and defaults. GUIDE makes the rational component,
+sign and zero-timeout policies explicit; CHANGELOG records the added coverage.
+Independent lens re-verification remains pending.
+
+| Finding | Change | Contract/evidence |
+| --- | --- | --- |
+| E-17 | Reject float, string and `__int__`-only numerators with the fixed `TypeError`. | `test_rational_components_require_index_protocol`: all six methods, suppressed error context, validation before key hashing and immediate reuse. |
+| E-18 | Apply the same rejection contract to malformed denominators. | The same component contract exercises all three malformed kinds across all six methods. |
+| E-19 | Preserve positive ratios represented by two negative components. | `test_numeric_timeout_budget_reaches_acquisition`: `(-1)/(-2)` reaches every acquisition as 0.5 seconds. |
+| E-20 | Accept `Fraction(0, 1)` as an immediate attempt on every method. | Free-key success, exact zero acquisition budgets and held-key `TimeoutError`, with group rollback and cleanup. Threaded attempts finish while the holder still owns its key; async attempts finish without suspending for acquisition. |
+| E-21 | Raise the fixed `ValueError` for zero denominators before acquisition. | `test_zero_denominator_raises_valueerror_before_acquisition`: negative, zero and positive numerators, all six methods, no key hashing and immediate reuse. |
+| E-22 | Convert denominator index objects and preserve their explicit exceptions. | All six methods accept a successful `__index__` result as a 0.5-second budget and preserve `TypeError`/`ValueError` identity and message. Successful numerator conversion is also covered. |
+
+The focused suite passes on the unchanged implementation: **228 passed**. The full
+suite adds **102 cases**. The reviewer's original public witnesses also pass:
+**66 passed**. No runtime correction or change to the numeric subclass domain was
+needed; failures below demonstrate the new contracts detecting deliberate regressions.
+
+Each of the six reported surviving mutations was replayed alone on an isolated
+scratch copy using the reviewer's exact replacement text. Every mutant fails through
+the contracts, with no collection failures. Source bytes are restored in `finally`
+and checked against the shared repository. After replay, **228 focused tests pass**.
+
+| Mutation | Regression | Failing cases | Catching contract |
+| --- | --- | --- | --- |
+| S07 | Coerce the numerator with `int` | 18 | Rational component index requirement |
+| S08 | Coerce the denominator with `int` | 18 | Rational component index requirement |
+| S09 | Reject either negative component | 6 | Two-negative-component acquisition budget |
+| S10 | Reject zero rational numerators | 18 | Zero Fraction free/held acquisition and zero budget |
+| S11 | Omit zero-denominator validation | 12 | Fixed `ValueError` before acquisition |
+| S16 | Omit denominator index conversion | 24 | Malformed component rejection, successful index budget and explicit exception identity |
+
+Validation:
+
+- `ruff format --check .`: exit 0, 51 files formatted.
+- `ruff check .`: exit 0.
+- `mypy --strict src`: exit 0, nine files; `mypy --strict src tests`: exit 0, 44 files.
+- Full pytest with a 300-second per-test limit, wheel installation, actual PyPI
+  0.2.0 upgrade, archive checks and fetched-specification checks: **646 passed**,
+  no skips, exit 0 on CPython 3.14.6.
+
+Detailed logs, exact mutation patches, commands and restoration evidence are retained
+under `scratch/keyedlock-cert/fix-r3/`. No new independent QA lens PASS is claimed;
 re-review, merge and publication remain separate stages.

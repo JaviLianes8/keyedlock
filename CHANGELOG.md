@@ -58,6 +58,9 @@ All notable changes to this project are documented here. The format follows
   iterator/comparison exception identity, bytearray collections and identical NaN keys.
 - Acquisition-budget contracts for integer subclasses, fractional seconds, enormous
   positive fractions and the platform timeout boundary, including contended handoff.
+- Rational timeout contracts for component index conversion, malformed components,
+  normalized signs, zero denominators and zero-valued fractions on free and held locks.
+  The guide makes these existing behaviors explicit; runtime behavior is unchanged.
 
 ## [0.2.0]
 

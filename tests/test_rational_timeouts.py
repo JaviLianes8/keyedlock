@@ -16,6 +16,7 @@ from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock
 ZERO_TIMEOUTS = [
     pytest.param(cast(float, Fraction(0, 1)), id="fraction-zero"),
     pytest.param(rational_timeout(0, -2), id="zero-negative-denominator"),
+    pytest.param(cast(float, Fraction(1, 10**400)), id="positive-rational-underflow"),
 ]
 
 

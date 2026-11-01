@@ -15,6 +15,7 @@ Progress:
 - [x] Certification QA round 1 corrections and regression contracts
 - [x] Certification QA round 3 rational timeout contracts
 - [x] Certification QA round 4 rational budgets and conversion overrides
+- [x] Certification QA round 5 rational boundaries and numeric protocols
 
 ## Starting point
 

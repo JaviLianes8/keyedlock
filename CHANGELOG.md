@@ -65,6 +65,11 @@ All notable changes to this project are documented here. The format follows
   with negative denominators, negative ratios that underflow, and misleading
   `__float__` overrides, including contended acquisition on every method. These
   additions preserve the existing runtime behavior and public API.
+- Rational timeout contracts for misleading comparisons, the exact platform maximum,
+  representable values above it, positive underflow on free and held keys, and direct
+  or registered `numbers.Rational` implementations with misleading float conversion.
+  All six acquisition methods retain their existing behavior; the guide clarifies
+  the component and positive-underflow policies.
 
 ## [0.2.0]
 

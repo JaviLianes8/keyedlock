@@ -10,7 +10,14 @@ from typing import cast
 
 import pytest
 from _acquisition import Factory, exercise
-from _timeout_values import IndexComponent, ZeroFloatInt, misleading_fraction, rational_timeout
+from _timeout_values import (
+    IndexComponent,
+    ZeroFloatInt,
+    misleading_comparison_fraction,
+    misleading_fraction,
+    non_fraction_rational,
+    rational_timeout,
+)
 
 from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock, _fifo, _primitive, _timing
 
@@ -39,6 +46,28 @@ from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock, _fifo, _primitive,
         pytest.param(misleading_fraction(2.0), 0.5, id="fraction-float-positive"),
         pytest.param(misleading_fraction(math.inf), 0.5, id="fraction-float-infinity"),
         pytest.param(misleading_fraction(math.nan), 0.5, id="fraction-float-nan"),
+        *(
+            pytest.param(
+                misleading_comparison_fraction(method, result),
+                0.5,
+                id=f"fraction-{method.strip('_')}-{result}",
+            )
+            for method in ("__lt__", "__le__", "__eq__", "__ne__", "__gt__", "__ge__")
+            for result in (False, True)
+        ),
+        pytest.param(non_fraction_rational(registered=False), 0.5, id="direct-rational"),
+        pytest.param(non_fraction_rational(registered=True), 0.5, id="registered-rational"),
+        pytest.param(cast(float, Fraction(1, 10**400)), 0.0, id="positive-rational-underflow"),
+        pytest.param(
+            cast(float, Fraction(int(threading.TIMEOUT_MAX), 1)),
+            threading.TIMEOUT_MAX,
+            id="fraction-maximum",
+        ),
+        pytest.param(
+            cast(float, Fraction(2 * int(threading.TIMEOUT_MAX), 1)),
+            None,
+            id="fraction-representable-above-maximum",
+        ),
         pytest.param(threading.TIMEOUT_MAX, threading.TIMEOUT_MAX, id="maximum"),
         pytest.param(int(threading.TIMEOUT_MAX), threading.TIMEOUT_MAX, id="integer-maximum"),
         pytest.param(math.nextafter(threading.TIMEOUT_MAX, math.inf), None, id="above-maximum"),

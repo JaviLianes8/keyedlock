@@ -192,7 +192,8 @@ Merge and publication remain separate stages.
 ## QA findings, round 1
 
 Date: 2026-11-01. Reviewed base: `b4ac8c90f7126726fd896fe2898c4dd83b4feb29`.
-Correction commit: this commit, `fix qa round one validation and contracts`.
+Correction commit: `4cf7b094743bff456d7f82514c5c8f0c4ccc91f8`
+(`fix qa round one validation and contracts`).
 All 13 supplied findings are addressed; independent lens re-verification remains
 pending. No finding is disputed. Public names, signatures and defaults are retained.
 Every behavior change is listed in CHANGELOG and the error/limit policy is in GUIDE.

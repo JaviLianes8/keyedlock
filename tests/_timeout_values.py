@@ -24,6 +24,14 @@ class IndexComponent:
         return self.value
 
 
+def misleading_fraction(result: float) -> float:
+    class FloatOverrideFraction(Fraction):
+        def __float__(self) -> float:
+            return result
+
+    return cast(float, FloatOverrideFraction(1, 2))
+
+
 def rational_timeout(numerator: object, denominator: object) -> float:
     def get_numerator(self: object) -> object:
         return numerator

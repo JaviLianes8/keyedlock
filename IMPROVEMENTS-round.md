@@ -14,6 +14,7 @@ Progress:
 - [x] Pull request opened (#2), guard clean
 - [x] Certification QA round 1 corrections and regression contracts
 - [x] Certification QA round 3 rational timeout contracts
+- [x] Certification QA round 4 rational budgets and conversion overrides
 
 ## Starting point
 

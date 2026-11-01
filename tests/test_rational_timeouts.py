@@ -13,6 +13,11 @@ from _timeout_values import IntOnlyComponent, rational_timeout
 
 from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock
 
+ZERO_TIMEOUTS = [
+    pytest.param(cast(float, Fraction(0, 1)), id="fraction-zero"),
+    pytest.param(rational_timeout(0, -2), id="zero-negative-denominator"),
+]
+
 
 class UntouchedKey:
     def __hash__(self) -> int:
@@ -56,22 +61,35 @@ def test_zero_denominator_raises_valueerror_before_acquisition(
 
 @pytest.mark.parametrize("factory", [KeyedLock, StripedLock, AsyncKeyedLock])
 @pytest.mark.parametrize("group", [False, True])
-def test_zero_fraction_succeeds_on_free_keys(factory: Factory, group: bool) -> None:
+def test_negative_denominator_underflow_raises_before_acquisition(
+    factory: Factory, group: bool
+) -> None:
     locks = factory()
-    exercise(locks, [0, 1], group=group, timeout=cast(float, Fraction(0, 1)))
+    with pytest.raises(ValueError) as caught:
+        exercise(locks, [UntouchedKey()], group=group, timeout=rational_timeout(1, -(10**400)))
+    assert str(caught.value) == "timeout must be None or a non-negative number"
+    exercise(locks, [0, 1], group=group)
+
+
+@pytest.mark.parametrize("factory", [KeyedLock, StripedLock, AsyncKeyedLock])
+@pytest.mark.parametrize("group", [False, True])
+@pytest.mark.parametrize("value", ZERO_TIMEOUTS)
+def test_zero_fraction_succeeds_on_free_keys(factory: Factory, group: bool, value: float) -> None:
+    locks = factory()
+    exercise(locks, [0, 1], group=group, timeout=value)
     exercise(locks, [0, 1], group=group)
 
 
 @pytest.mark.parametrize("factory", [KeyedLock, StripedLock])
 @pytest.mark.parametrize("group", [False, True])
+@pytest.mark.parametrize("value", ZERO_TIMEOUTS)
 def test_zero_fraction_fails_without_waiting_on_held_threaded_keys(
-    factory: type[KeyedLock | StripedLock], group: bool
+    factory: type[KeyedLock | StripedLock], group: bool, value: float
 ) -> None:
     locks = factory()
     outcomes: list[Exception] = []
 
     def attempt() -> None:
-        value = cast(float, Fraction(0, 1))
         manager = locks.lock_many([0, 1], timeout=value) if group else locks.lock(1, timeout=value)
         try:
             with manager:
@@ -96,12 +114,12 @@ def test_zero_fraction_fails_without_waiting_on_held_threaded_keys(
 
 
 @pytest.mark.parametrize("group", [False, True])
-def test_zero_fraction_fails_without_waiting_on_held_async_keys(group: bool) -> None:
+@pytest.mark.parametrize("value", ZERO_TIMEOUTS)
+def test_zero_fraction_fails_without_waiting_on_held_async_keys(group: bool, value: float) -> None:
     async def run() -> None:
         locks = AsyncKeyedLock()
 
         async def attempt() -> None:
-            value = cast(float, Fraction(0, 1))
             manager = (
                 locks.lock_many([0, 1], timeout=value) if group else locks.lock(1, timeout=value)
             )

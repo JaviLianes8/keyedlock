@@ -10,7 +10,7 @@ from typing import cast
 
 import pytest
 from _acquisition import Factory, exercise
-from _timeout_values import IndexComponent, ZeroFloatInt, rational_timeout
+from _timeout_values import IndexComponent, ZeroFloatInt, misleading_fraction, rational_timeout
 
 from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock, _fifo, _primitive, _timing
 
@@ -24,10 +24,21 @@ from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock, _fifo, _primitive,
         pytest.param(cast(float, Fraction(1, 2)), 0.5, id="fraction-half"),
         pytest.param(cast(float, Fraction(3, 2)), 1.5, id="fraction-three-halves"),
         pytest.param(cast(float, Fraction(0, 1)), 0.0, id="fraction-zero"),
+        pytest.param(rational_timeout(0, -2), 0.0, id="zero-negative-denominator"),
         pytest.param(rational_timeout(-1, -2), 0.5, id="two-negative-components"),
         pytest.param(rational_timeout(IndexComponent(1), 2), 0.5, id="numerator-index"),
         pytest.param(rational_timeout(1, IndexComponent(2)), 0.5, id="denominator-index"),
         pytest.param(cast(float, Fraction(10**400, 1)), None, id="huge-fraction"),
+        pytest.param(
+            cast(float, Fraction(10**400 + 1, 2 * 10**400 + 1)),
+            0.5,
+            id="finite-ratio-huge-components",
+        ),
+        pytest.param(misleading_fraction(0.0), 0.5, id="fraction-float-zero"),
+        pytest.param(misleading_fraction(-1.0), 0.5, id="fraction-float-negative"),
+        pytest.param(misleading_fraction(2.0), 0.5, id="fraction-float-positive"),
+        pytest.param(misleading_fraction(math.inf), 0.5, id="fraction-float-infinity"),
+        pytest.param(misleading_fraction(math.nan), 0.5, id="fraction-float-nan"),
         pytest.param(threading.TIMEOUT_MAX, threading.TIMEOUT_MAX, id="maximum"),
         pytest.param(int(threading.TIMEOUT_MAX), threading.TIMEOUT_MAX, id="integer-maximum"),
         pytest.param(math.nextafter(threading.TIMEOUT_MAX, math.inf), None, id="above-maximum"),

@@ -92,11 +92,14 @@ also accepts integers in type checkers. NaN and negative values raise `ValueErro
 Validation uses normalized numeric values, not overloaded comparisons: integer
 subclasses use their underlying integer, rationals convert both numerator and
 denominator through `__index__`, and other real numbers use their float conversion.
+Rational subclasses use that component ratio even if `__float__` returns another
+value. Huge components can still produce a finite ratio and a finite wait budget.
 Rational components that are floats, strings or implement only `__int__` are rejected.
 A zero denominator raises `ValueError`. The ratio determines the sign: two negative
 components produce a valid positive timeout. Negative rationals are rejected even
-when conversion would round to negative zero. `Fraction(0, 1)` tries immediately,
-succeeding on free locks and raising `TimeoutError` on locks held elsewhere.
+when conversion would round to negative zero. A zero numerator with either sign
+of nonzero denominator tries immediately, succeeding on free locks and raising
+`TimeoutError` on locks held elsewhere.
 Above `threading.TIMEOUT_MAX`, including infinity and enormous positive integers
 or fractions, the timeout means no limit. The maximum itself remains a finite
 budget. This is a library policy, not the standard library's overflow behavior.

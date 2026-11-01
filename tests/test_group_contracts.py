@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-from _timeout_values import ZeroFloatInt
+from _timeout_values import ZeroFloatInt, misleading_fraction
 
 from keyedlock import AsyncKeyedLock, KeyedLock, StripedLock, _primitive, _timing
 
@@ -42,19 +42,21 @@ def test_striped_group_spends_one_budget(monkeypatch: pytest.MonkeyPatch) -> Non
 @pytest.mark.parametrize("factory", [KeyedLock, StripedLock])
 @pytest.mark.parametrize("group", [False, True])
 @pytest.mark.parametrize(
-    "value",
+    ("value", "budget"),
     [
-        float("inf"),
-        threading.TIMEOUT_MAX * 2,
-        10**400,
-        cast(float, Fraction(10**400)),
-        ZeroFloatInt(2),
+        (float("inf"), None),
+        (threading.TIMEOUT_MAX * 2, None),
+        (10**400, None),
+        (cast(float, Fraction(10**400)), None),
+        (ZeroFloatInt(2), 2.0),
+        pytest.param(misleading_fraction(0.0), 0.5, id="fraction-float-zero"),
     ],
 )
 def test_numeric_timeout_waits_for_threaded_handoff(
     factory: type[KeyedLock | StripedLock],
     group: bool,
     value: float,
+    budget: float | None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     locks = factory()
@@ -87,9 +89,9 @@ def test_numeric_timeout_waits_for_threaded_handoff(
         with locks.lock(0):
             thread.start()
             assert attempting.wait(5)
-            if isinstance(value, ZeroFloatInt):
+            if budget is not None:
                 assert len(limits) == 1
-                assert limits[0] is not None and 0 < limits[0] <= 2
+                assert limits[0] is not None and 0 < limits[0] <= budget
             else:
                 assert limits == [None]
     finally:
@@ -109,6 +111,7 @@ def test_numeric_timeout_waits_for_threaded_handoff(
         10**400,
         cast(float, Fraction(10**400)),
         ZeroFloatInt(2),
+        pytest.param(misleading_fraction(0.0), id="fraction-float-zero"),
     ],
 )
 def test_numeric_timeout_waits_for_async_handoff(group: bool, value: float) -> None:

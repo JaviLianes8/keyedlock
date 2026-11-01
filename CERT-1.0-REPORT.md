@@ -2,7 +2,7 @@
 
 Preparation date: 2026-11-01. Validated source: `dbc21ba`.
 The preparation evidence below is historical. Current correction results are in
-the QA round 1 section at the end of this report.
+the QA round 2 section at the end of this report.
 Base: `main` at `4e54b50` (0.2.0). The interrupted branch's initial report at
 `11e48ff` remains in history. `https://pypi.org/pypi/keyedlock/json` returned HTTP 200 on 2026-11-01:
 0.2.0 was uploaded at 2026-11-01T02:11:21Z. Its earlier reported 404 is stale.
@@ -261,3 +261,77 @@ Validation:
 Detailed logs, isolated mutation edits, comparison counts and subprocess evidence
 are retained under `scratch/keyedlock-cert/fix-r1/`. No new QA lens PASS is claimed;
 the independent re-review, merge and publication remain separate stages.
+
+## QA findings, round 2
+
+Date: 2026-11-01. Reviewed base: `d58d87c6f764a02c796079a7ad54f96fec85b569`.
+Correction commit: `88c091b82c98234c554beb3908498282f19c809d`
+(`fix timeout conversion errors and strengthen acquisition contracts`).
+All 13 supplied findings are addressed. No finding is disputed. Independent lens
+re-verification remains pending. Public names, signatures and defaults are retained.
+
+C-007 changes runtime behavior: malformed built-in float and rational component
+conversions now raise a fixed `TypeError` without displaying the original chain.
+Explicit failures from Python conversion methods/properties retain their identity
+and message. CHANGELOG records this change and GUIDE documents the error policy.
+E-05 through E-16 add missing regression contracts for existing behavior.
+
+| Finding | Change | Contract/evidence |
+| --- | --- | --- |
+| C-007 | Normalize built-in numeric conversion failures without exposing caller-controlled type names. | `test_timeout_protocols.py`: 30 malformed conversion cases across all six methods, complete tracebacks, and 48 explicit-exception preservation cases. |
+| E-05 | Accept exactly 10,000 visited values. | `test_structure_contracts.py::test_visited_value_boundary`: tuple, frozenset, mixed structure and subclasses, all six methods. |
+| E-06 | Reject exactly 10,001 visited values with the fixed structure-limit error. | The same boundary contract checks rejection, cleanup and immediate reuse. |
+| E-07 | Enforce frozenset and mixed tuple/frozenset nesting and structure limits. | `test_stored_nesting_boundary` checks 64 accepted levels and 65 rejected levels; visited-value boundaries also cover frozensets. |
+| E-08 | Inspect stored tuple/frozenset subclass members despite overridden empty iteration. | Both structure contracts cover hidden-member subclasses across all six methods. |
+| E-09 | Preserve explicit iterator `TypeError` identity and message. | `test_collection_contracts.py::test_iterator_typeerror_preserves_identity_and_message`: both `__iter__` and `__next__`, all three group methods. |
+| E-10 | Accept bytearray collections as integer keys. | `test_bytearray_collection_acquires_integer_keys`: all group methods, duplicate keys, active counts and reuse. |
+| E-11 | Deduplicate identical non-reflexive keys. | `test_identical_nan_keys_deduplicate_and_release`: both keyed classes hold one entry, release to zero and reacquire the identical NaN. |
+| E-12 | Use the underlying positive integer despite a zero-valued float override. | `test_timeout_budgets.py` checks all six acquisition budgets; `test_group_contracts.py` checks threaded and async contended handoff. |
+| E-13 | Retain non-integral Fraction magnitudes. | Acquisition recorders observe 0.5 and 1.5 seconds through all six methods with a controlled clock. |
+| E-14 | Treat overflowing positive Fractions as unlimited. | `Fraction(10**400)` reaches acquisition as `None` and succeeds in contended single/group handoff for every class. |
+| E-15 | Keep `TIMEOUT_MAX` finite and normalize larger values to unlimited. | All six methods check the float/integer maximum and the next representable float/next integer above it. |
+| E-16 | Propagate comparison `ValueError` identity and message. | Both keyed group methods exercise failures during sorting and adjacent-order validation, then verify cleanup and reuse. |
+
+Before the runtime fix, the new C-007 contracts produced **30 failures and 48
+passes** against the reviewed source. After the fix all 78 pass. The complete
+focused contract set passes before and after mutation replay: **295 passed**.
+The full suite adds 273 cases to the reviewed baseline.
+
+Each reported surviving mutation was applied alone to an isolated scratch copy,
+with exact source restoration in `finally`. All twelve are now killed by actual
+contract failures; none fails during collection. The N24 patch's indentation was
+adjusted to match the surrounding conversion guard; its behavior is unchanged.
+
+| Mutation | Regression | Failing cases | Catching contract |
+| --- | --- | --- | --- |
+| N01 | Reject 10,000 visits | 30 | `test_visited_value_boundary` |
+| N02 | Accept 10,001 visits | 30 | `test_visited_value_boundary` |
+| N05 | Skip frozenset inspection | 36 | Both structure boundary contracts |
+| N06 | Trust overridden container iteration | 24 | Both structure boundary contracts |
+| N10 | Replace explicit iterator `TypeError` | 3 | Iterator exception identity |
+| N12 | Reject bytearray collections | 3 | Bytearray group acquisition |
+| N15 | Remove key identity matching | 2 | Identical NaN deduplication |
+| N21 | Use integer subclass float override | 12 | Acquisition budgets and threaded/async handoff |
+| N22 | Invert Fraction magnitude | 18 | Numeric acquisition budgets |
+| N24 | Raise on huge Fraction overflow | 12 | Acquisition budgets and threaded/async handoff |
+| N26 | Make `TIMEOUT_MAX` unlimited | 12 | Numeric acquisition budgets |
+| N30 | Rewrite comparison `ValueError` | 4 | Comparison exception identity |
+
+Validation:
+
+- `ruff format --check .`: exit 0, 50 files formatted.
+- `ruff check .`: exit 0.
+- `mypy --strict src`: exit 0, nine files; `mypy --strict src tests`: exit 0, 43 files.
+- Full pytest with a 300-second per-test limit, wheel installation, actual PyPI
+  0.2.0 upgrade, archive checks and fetched-specification checks: **544 passed**,
+  no skips, exit 0 on CPython 3.14.6.
+- Available interpreter matrix: CPython 3.10.22, 3.11.11, 3.11.18, 3.12.16,
+  3.13.18, 3.14.6, 3.14.10 and 3.14.10 free-threaded. Each ran the revised source
+  suite: **543 passed**, one separately exercised wheel test skipped, exit 0.
+  The free-threaded run verified the GIL remained disabled through suite completion.
+- Original lens C numeric/protocol probes against the corrected source, including
+  both C-007 reproductions: **14 passed**, exit 0.
+
+Detailed logs, mutation patches, commands and results are retained under
+`scratch/keyedlock-cert/fix-r2/`. No new independent QA lens PASS is claimed;
+re-review, merge and publication remain separate stages.

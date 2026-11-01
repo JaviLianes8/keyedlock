@@ -2,7 +2,7 @@
 
 Preparation date: 2026-11-01. Validated source: `dbc21ba`.
 The preparation evidence below is historical. Current correction results are in
-the QA round 4 section at the end of this report.
+the QA round 5 section at the end of this report.
 Base: `main` at `4e54b50` (0.2.0). The interrupted branch's initial report at
 `11e48ff` remains in history. `https://pypi.org/pypi/keyedlock/json` returned HTTP 200 on 2026-11-01:
 0.2.0 was uploaded at 2026-11-01T02:11:21Z. Its earlier reported 404 is stale.
@@ -440,4 +440,56 @@ Validation:
 
 Detailed logs, exact mutation patches, commands and restoration evidence are retained
 under `scratch/keyedlock-cert/fix-r4/`. No new independent QA lens PASS is claimed;
+re-review, merge and publication remain separate stages.
+
+## QA findings, round 5
+
+Date: 2026-11-01. Reviewed base: `08c5d6dbe7b70a2726226cb4229e5e5391c97458`.
+Correction commit: `dfafc71230fe38e4d77c18f0c32afa692a39600b`
+(`strengthen rational timeout boundary contracts`).
+All five supplied findings E-27 through E-31 are addressed. No finding is disputed.
+The findings concern missing regression contracts for existing behavior. Runtime
+code and the public API are unchanged. GUIDE clarifies component normalization
+for direct and registered rational implementations and positive underflow;
+CHANGELOG records the added coverage. Independent lens re-verification is pending.
+
+| Finding | Change | Contract/evidence |
+| --- | --- | --- |
+| E-27 | Ignore overloaded comparisons when normalizing positive rational timeouts. | `test_numeric_timeout_budget_reaches_acquisition`: each of the six comparison operators returns a forced true or false result; all six methods still acquire with a 0.5-second budget. |
+| E-28 | Keep a rational timeout equal to the platform maximum finite. | `Fraction(int(threading.TIMEOUT_MAX), 1)` reaches all six acquisition boundaries as `threading.TIMEOUT_MAX`, never `None`. |
+| E-29 | Accept positive rational underflow as an immediate attempt. | `Fraction(1, 10**400)` produces zero budgets, succeeds on free keys and raises `TimeoutError` on held keys across all six methods; group rollback, idle cleanup and reuse are checked. |
+| E-30 | Treat representable rational values above the platform maximum as unlimited. | `Fraction(2 * int(threading.TIMEOUT_MAX), 1)` reaches all six methods as `None`, covering the finite-conversion path separately from overflow. |
+| E-31 | Normalize components for non-Fraction Rational implementations. | Direct and registered rational types with components 1 and 2 and `__float__` returning zero deliver a 0.5-second budget through all six methods. The direct type implements every abstract operation by delegation to the same Fraction ratio. |
+
+The focused contracts pass on the reviewed runtime: **312 passed**. The full suite
+adds **114 cases**. The reviewer's original witnesses also pass: **38 passed**.
+Each of the five reported mutations was replayed alone on an isolated scratch copy
+using the reviewer's exact replacement text. All five cause contract failures;
+none fails during collection. Source bytes are restored in `finally`, checked
+against the shared repository and verified by SHA-256. After restoration the same
+**312 focused tests pass**.
+
+| Mutation | Regression | Failing cases | Catching contract |
+| --- | --- | --- | --- |
+| C02 | Reject rationals through overloaded comparison | 12 | Six positive Fraction comparison cases and six registered-rational acquisition budgets |
+| C05 | Make the rational platform maximum unlimited | 6 | Exact-maximum rational acquisition budgets |
+| C06 | Reject positive rational underflow | 18 | Zero budgets and free/held acquisition across all methods |
+| C07 | Cap representable rationals above the maximum | 6 | Unlimited acquisition budgets after finite conversion |
+| C09 | Recognize only Fraction as rational | 12 | Direct and registered Rational component-derived budgets |
+
+Validation:
+
+- `ruff format --check .`: exit 0, 51 files formatted.
+- `ruff check .`: exit 0.
+- `mypy --strict src`: exit 0, nine files; `mypy --strict src tests`: exit 0, 44 files.
+- Full pytest with a 300-second per-test limit, wheel installation, actual PyPI
+  0.2.0 upgrade, archive checks and fetched-specification checks: **826 passed**,
+  no skips, exit 0 on CPython 3.14.6.
+- Available interpreter matrix: CPython 3.10.22, 3.11.11, 3.11.18, 3.12.16,
+  3.13.18, 3.14.6, 3.14.10 and 3.14.10 free-threaded. Each ran the revised source
+  suite: **825 passed**, one separately exercised wheel test skipped, exit 0.
+  The free-threaded run verified the GIL remained disabled through suite completion.
+
+Detailed logs, exact mutation patches, commands and restoration evidence are retained
+under `scratch/keyedlock-cert/fix-r5/`. No new independent QA lens PASS is claimed;
 re-review, merge and publication remain separate stages.

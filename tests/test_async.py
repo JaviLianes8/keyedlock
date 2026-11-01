@@ -72,7 +72,7 @@ def test_timeouts_raise_and_leave_nothing_behind() -> None:
         lock = AsyncKeyedLock()
         async with lock.lock("k"):
             for timeout in (0, 0.01):
-                with pytest.raises(TimeoutError, match="'k'"):
+                with pytest.raises(TimeoutError, match="could not lock key"):
                     await asyncio.create_task(_enter(lock, "k", timeout))
             assert lock.active_keys() == 1
         await asyncio.sleep(0)

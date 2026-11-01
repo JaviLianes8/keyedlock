@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-01
+
+### Stable
+
+- `KeyedLock`, `StripedLock` and `AsyncKeyedLock`, their constructors, `lock`,
+  `lock_many`, counts and built-in exception families are the stable public API.
+- Python 3.10 through 3.14, with no runtime dependencies and shipped type information.
+
+### Changed
+
+- Timeout errors no longer include the key or call its `repr`. Striped timeout errors
+  identify the stripe index instead. Invalid timeout and stripe types use fixed messages
+  without the supplied type name. This keeps keys and huge inputs out of library errors.
+- `reentrant` must be a boolean; truthy and falsey non-booleans now raise `TypeError`.
+- Public classes identify their module as `keyedlock` instead of a private module.
+  Existing class references pickled through the old module paths still load.
+- The incidental `annotations` module attribute is removed; only the documented
+  classes remain as non-underscore package attributes.
+
+### Fixed
+
+- Async waiter handoff and cancellation remove queue entries in constant time instead
+  of scanning the remaining queue. FIFO order and cancellation behavior are unchanged.
+
+### Added
+
+- Runnable examples for every public class, method and property, a detailed guide,
+  standard-library differential tests and expanded error and contract coverage.
+
 ## [0.2.0]
 
 ### Added

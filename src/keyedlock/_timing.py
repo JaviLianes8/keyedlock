@@ -21,7 +21,7 @@ def check_timeout(timeout: float | None) -> float | None:
     if timeout is None:
         return None
     if isinstance(timeout, bool) or not isinstance(timeout, numbers.Real):
-        raise TypeError(f"timeout must be a real number or None, not {type(timeout).__name__}")
+        raise TypeError("timeout must be a real number or None (not bool)")
     # Compare before converting: a huge int would overflow float(), and NaN != NaN.
     if timeout != timeout or timeout < 0:
         raise ValueError("timeout must be None or a non-negative number")

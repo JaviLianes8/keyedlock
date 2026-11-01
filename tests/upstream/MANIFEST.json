@@ -1,0 +1,32 @@
+[
+  {
+    "file": "threading.rst",
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.14.0/Doc/library/threading.rst",
+    "revision": "v3.14.0",
+    "fetched": "2026-11-01",
+    "size": 52591,
+    "sha256": "35bc2547d513b1ee02b9917391408068f6d8dde044ef2378042b8abc170e07d7",
+    "licence": "PSF-2.0",
+    "license_url": "https://docs.python.org/3/license.html"
+  },
+  {
+    "file": "asyncio-sync.rst",
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.14.0/Doc/library/asyncio-sync.rst",
+    "revision": "v3.14.0",
+    "fetched": "2026-11-01",
+    "size": 12876,
+    "sha256": "ce9b6b4f31a3efaa71d58756696da49ec44b2c5547288c4009d4053273081f88",
+    "licence": "PSF-2.0",
+    "license_url": "https://docs.python.org/3/license.html"
+  },
+  {
+    "file": "stdtypes.rst",
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.14.0/Doc/library/stdtypes.rst",
+    "revision": "v3.14.0",
+    "fetched": "2026-11-01",
+    "size": 237003,
+    "sha256": "98bf9fe448aed657067f78387e1248da6e503761e260ab38d737e14cccb2d1fe",
+    "licence": "PSF-2.0",
+    "license_url": "https://docs.python.org/3/license.html"
+  }
+]

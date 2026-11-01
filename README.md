@@ -1,5 +1,7 @@
 # keyedlock
 
+[![Lianes8 Certified](https://lianes8studio.com/certified/lianes8-certified-badge.svg)](https://lianes8studio.com/certified)
+
 Lock by key: concurrent work on the same key serializes, different keys run in parallel, with reference-counted cleanup.
 
 ## Install
@@ -12,9 +14,7 @@ Python 3.10 or newer, no dependencies.
 
 ## Usage
 
-Serialize work per key while letting unrelated keys proceed at the same time. A common
-case is a per-user or per-id critical section: two requests for the same user wait for
-each other, two requests for different users do not.
+Serialize work per key while letting unrelated keys proceed at the same time. Use it for per-user or per-id critical sections.
 
 ```python
 from concurrent.futures import ThreadPoolExecutor
@@ -44,7 +44,8 @@ Each key gets its own lock on first use. When the last holder and waiter leave, 
 is dropped from the table, so the table never grows with the number of distinct keys you
 have touched. `active_keys()` reports how many keys are held or waited on right now. A
 wait that ends early (a timeout, `KeyboardInterrupt`, a cancelled task) gives its place
-back too, and so does a key whose hash changed while it was held. Keys follow `dict` rules: `1`, `1.0` and `True` are the same key.
+back too, and cleanup also attempts to recover from a key whose hash changed while held.
+Keys must keep stable hashes and equality while in use. Keys follow `dict` rules: `1`, `1.0` and `True` are the same key.
 
 ### Timeouts
 
@@ -53,31 +54,12 @@ number of seconds waits at most that long. When it runs out, `TimeoutError` is r
 nothing is left locked.
 
 ```python
-import threading
-
 from keyedlock import KeyedLock
 
 locks = KeyedLock()
-holding = threading.Event()
-done = threading.Event()
-
-
-def slow_job() -> None:
-    with locks.lock("report"):
-        holding.set()
-        done.wait()
-
-
-worker = threading.Thread(target=slow_job)
-worker.start()
-holding.wait()
-try:
-    with locks.lock("report", timeout=0.05):
-        pass
-except TimeoutError as error:
-    print(error)  # could not lock key 'report' within 0.05 seconds
-done.set()
-worker.join()
+with locks.lock("report", timeout=0):
+    print("acquired")  # acquired
+print(locks.active_keys())  # 0
 ```
 
 ### Re-entry
@@ -104,11 +86,12 @@ with nested.lock("job-42"), nested.lock("job-42"):
 
 ### Several keys at once
 
-Taking two keys by nesting `lock` calls deadlocks as soon as another thread takes the
-same pair in the opposite order. `lock_many` deduplicates the keys and takes them in
-sorted order, so every caller agrees on the order. The keys need a total order (all
-`str`, all `int`, ...); sets, NaN and mixed types raise `TypeError` before anything is
-locked. Pass a collection: a bare `str` is refused rather than split into characters.
+Nested `lock` calls can deadlock when another thread takes the same keys in the
+opposite order. `lock_many` deduplicates the keys and takes them in
+sorted order, so every caller agrees on the order. Distinct keys must sort into a strictly
+increasing order (all `str`, all `int`, ...). Incomparable pairs, such as disjoint frozen sets or a NaN
+with another value, raise `TypeError` before anything is locked.
+Pass a collection: a bare `str` is refused rather than split into characters.
 `timeout` covers the whole acquisition, and if any key cannot be taken, the ones already
 taken are released.
 
@@ -132,12 +115,9 @@ print(accounts)  # {'alice': 80, 'bob': 20}
 
 ### Striped mode
 
-When the key space is huge or unbounded and you would rather cap memory than track every
-key, use `StripedLock`. It maps keys onto a fixed pool of locks: memory is allocated once
-and never grows, at the cost of occasional false contention when two unrelated keys land
-on the same stripe. Because of that, nest two keys with `lock_many`, not with two
-`lock` calls: two different keys may share a stripe (with string keys, which ones depends
-on the process hash seed), and re-entering a held stripe raises `RuntimeError`.
+Use `StripedLock` to cap the number of locks. Unrelated keys can share a stripe and
+block each other. Use `lock_many` for groups: nesting individual calls may reenter
+a stripe and raise `RuntimeError`. String stripe indices depend on the process hash seed.
 
 ```python
 from keyedlock import StripedLock
@@ -151,11 +131,9 @@ with locks.lock_many(["user-7", "user-9"], timeout=1):
 
 ### asyncio
 
-`AsyncKeyedLock` gives coroutines the same contract. Waiters on one key are served first
-come, first served, whether or not they pass a timeout: the lock is handed straight to
-the oldest waiter, so nobody can slip past the queue. A task cancelled or timed out while
-waiting leaves nothing behind. Like `asyncio.Lock`, it is not thread-safe: use an
-instance from one event loop.
+`AsyncKeyedLock` serves waiters on each key in FIFO order, including timed waiters.
+Cancellation and timeout release their place. Use an instance from one event loop;
+it is not thread-safe. Threaded locks make no FIFO promise.
 
 ```python
 import asyncio
@@ -183,12 +161,6 @@ asyncio.run(main())
 print(log)  # ['ann:a:start', 'ann:a:end', 'ann:b:start', 'ann:b:end']
 ```
 
-### Fairness
-
-`KeyedLock` and `StripedLock` sit on `threading.Lock`, whose documentation leaves the
-order in which waiters are woken undefined; under sustained contention on one key a
-waiter can be overtaken. `AsyncKeyedLock` is strictly first come, first served.
-
 ## API
 
 | Name | What it does |
@@ -209,24 +181,20 @@ re-entry into a non-reentrant lock, `ValueError` for a negative or NaN timeout a
 
 ## Why
 
-The "one lock per key" pattern is re-implemented constantly: a dict of locks guarded by a
-meta-lock. Done naively the dict leaks, growing with every distinct key ever seen; done
-carefully the reference counting is easy to get wrong under contention, timeouts and
-interruption.
+Python's [threading locks](https://docs.python.org/3/library/threading.html#lock-objects)
+and [asyncio locks](https://docs.python.org/3/library/asyncio-sync.html#lock) protect a
+single resource. They are enough when one mutex covers the work. A dictionary of those
+locks can separate resources, but the application must synchronize that dictionary,
+remove idle entries and arrange a consistent order for multi-key operations.
 
-Existing options fall short. `mutexcache` creates a lock per key but keeps it forever, so
-the table grows without bound. Per-key helpers like the one inside `fleche` are not
-standalone packages. There is no small, typed, zero-dependency library that pairs
-reference-counted cleanup with timeouts, deadlock-free multi-key locking, an asyncio
-variant and an optional striped mode. `keyedlock` is that: standard library only, full
-type hints, `py.typed`, and `mypy --strict` clean.
+`keyedlock` supplies that bookkeeping, timeouts and an optional fixed stripe pool using
+only the standard library. It is an in-process utility: it does not coordinate separate
+processes or machines, provide distributed leases, or make external database updates
+transactional. Use a database transaction or a process-shared lock for those needs.
 
-## License
+The [GUIDE](https://github.com/JaviLianes8/keyedlock/blob/main/GUIDE.md) documents key
+requirements, error types, deadlines and upgrade behavior. See the
+[CHANGELOG](https://github.com/JaviLianes8/keyedlock/blob/main/CHANGELOG.md) for releases.
+There is no command-line interface; locks are held inside the calling Python process.
 
-MIT. See [LICENSE](LICENSE).
-
-## Links
-
-- Website: https://lianes8studio.com
-- GitHub: https://github.com/JaviLianes8
-- LinkedIn: https://www.linkedin.com/in/jlianes/
+MIT. See [LICENSE](https://github.com/JaviLianes8/keyedlock/blob/main/LICENSE).

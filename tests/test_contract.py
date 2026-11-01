@@ -9,6 +9,9 @@ PUBLIC_API: list[str] = ["AsyncKeyedLock", "KeyedLock", "StripedLock"]
 
 def test_all_lists_exactly_the_public_api() -> None:
     assert sorted(keyedlock.__all__) == sorted(PUBLIC_API)
+    assert sorted(name for name in vars(keyedlock) if not name.startswith("_")) == sorted(
+        PUBLIC_API
+    )
 
 
 def test_every_exported_name_resolves() -> None:

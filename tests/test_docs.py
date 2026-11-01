@@ -7,14 +7,16 @@ import io
 import re
 from pathlib import Path
 
+import pytest
+
 import keyedlock
 
 ROOT = Path(__file__).resolve().parents[1]
 README = (ROOT / "README.md").read_text(encoding="utf-8")
 
 
-def _python_blocks() -> list[str]:
-    return re.findall(r"```python\n(.*?)```", README, flags=re.DOTALL)
+def _python_blocks(text: str = README) -> list[str]:
+    return re.findall(r"```python\n(.*?)```", text, flags=re.DOTALL)
 
 
 def _expected_prints(block: str) -> list[str]:
@@ -26,16 +28,18 @@ def test_the_readme_has_examples() -> None:
     assert len(_python_blocks()) >= 6
 
 
-def test_every_readme_example_runs_and_prints_its_comment() -> None:
+@pytest.mark.parametrize("filename", ["README.md", "GUIDE.md"])
+def test_every_document_example_runs_and_prints_its_comment(filename: str) -> None:
     checked = 0
-    for block in _python_blocks():
+    text = (ROOT / filename).read_text(encoding="utf-8")
+    for block in _python_blocks(text):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            exec(compile(block, "README.md", "exec"), {"__name__": "readme"})
+            exec(compile(block, filename, "exec"), {"__name__": "example"})
         expected = _expected_prints(block)
         assert out.getvalue().splitlines() == expected
         checked += len(expected)
-    assert checked >= 10
+    assert checked >= (10 if filename == "README.md" else 3)
 
 
 def test_the_readme_api_table_lists_every_public_name() -> None:

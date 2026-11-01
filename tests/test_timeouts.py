@@ -45,7 +45,7 @@ def _held_elsewhere(locker: Locker, key: str) -> tuple[threading.Event, threadin
 def test_zero_timeout_fails_at_once_on_a_held_key(locker: Locker) -> None:
     done, thread = _held_elsewhere(locker, "k")
     started = time.monotonic()
-    with pytest.raises(TimeoutError, match="'k'"), locker("k", timeout=0):
+    with pytest.raises(TimeoutError, match="could not lock"), locker("k", timeout=0):
         pass
     assert time.monotonic() - started < 1
     done.set()

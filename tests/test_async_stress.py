@@ -5,16 +5,19 @@ from __future__ import annotations
 import asyncio
 import random
 
+import pytest
+
 from keyedlock import AsyncKeyedLock
 
 TASKS = 300
 KEYS = 5
 
 
-def test_invariants_hold_under_timeouts_and_cancellation() -> None:
+@pytest.mark.parametrize("seed", [7, 101, 20261101])
+def test_invariants_hold_under_timeouts_and_cancellation(seed: int) -> None:
     async def main() -> None:
         lock = AsyncKeyedLock()
-        rng = random.Random(7)
+        rng = random.Random(seed)
         inside = [0] * KEYS
         totals = [0] * KEYS
         entered = [0] * KEYS
@@ -54,7 +57,10 @@ def test_invariants_hold_under_timeouts_and_cancellation() -> None:
         for _ in range(TASKS // 3):
             await asyncio.sleep(0)
             rng.choice(tasks).cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        assert all(
+            result is None or isinstance(result, asyncio.CancelledError) for result in results
+        )
         await asyncio.sleep(0)
         assert overlaps == 0
         assert totals == entered

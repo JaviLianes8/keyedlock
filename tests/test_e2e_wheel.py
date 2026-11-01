@@ -82,15 +82,20 @@ print("e2e ok")
 
 def _run(*cmd: str | Path, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [str(c) for c in cmd], cwd=cwd, capture_output=True, text=True, check=False
+        [str(c) for c in cmd], cwd=cwd, capture_output=True, text=True, check=False, timeout=240
     )
 
 
 def test_installed_wheel_end_to_end(tmp_path: Path) -> None:
     dist = tmp_path / "dist"
-    built = _run(sys.executable, "-m", "build", "--wheel", "--outdir", dist, ROOT)
+    built = _run(sys.executable, "-m", "build", "--outdir", dist, ROOT)
     assert built.returncode == 0, built.stderr
     (wheel,) = dist.glob("keyedlock-*.whl")
+    from _package_checks import inspect_distributions
+
+    inspect_distributions(dist)
+    rendered = _run(sys.executable, "-m", "twine", "check", "--strict", *dist.iterdir())
+    assert rendered.returncode == 0, rendered.stdout + rendered.stderr
 
     env_dir = tmp_path / "venv"
     venv.create(env_dir, with_pip=True)
@@ -105,3 +110,19 @@ def test_installed_wheel_end_to_end(tmp_path: Path) -> None:
     result = _run(python, "-I", "-c", PROGRAM, cwd=work)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "e2e ok"
+
+    if os.environ.get("KEYEDLOCK_E2E_PYPI") == "1":
+        previous = _run(python, "-m", "pip", "install", "--force-reinstall", "keyedlock==0.2.0")
+        assert previous.returncode == 0, previous.stderr
+        from _upgrade_checks import UPGRADE
+
+        before = _run(python, "-I", "-c", UPGRADE, "0.2.0", cwd=work)
+        assert before.returncode == 0, before.stderr
+        legacy = _run(python, "-I", "-c", PROGRAM, cwd=work)
+        assert legacy.returncode == 0, legacy.stderr
+        upgraded = _run(python, "-m", "pip", "install", "--upgrade", wheel)
+        assert upgraded.returncode == 0, upgraded.stderr
+        after = _run(python, "-I", "-c", UPGRADE, "1.0.0", cwd=work)
+        assert after.returncode == 0, after.stderr
+        result = _run(python, "-I", "-c", PROGRAM, cwd=work)
+        assert result.returncode == 0, result.stderr

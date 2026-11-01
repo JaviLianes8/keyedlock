@@ -16,7 +16,7 @@ class SecretKey:
 
 
 @pytest.mark.parametrize("factory", [KeyedLock, StripedLock])
-@pytest.mark.parametrize("key", [SecretKey(), "secret" * 200000])
+@pytest.mark.parametrize("key", [SecretKey(), "secret" * 200000], ids=["object", "long-str"])
 def test_thread_timeout_never_formats_keys(
     factory: type[KeyedLock | StripedLock], key: object
 ) -> None:
@@ -41,7 +41,7 @@ def test_thread_timeout_never_formats_keys(
     assert "secret" not in str(errors[0])
 
 
-@pytest.mark.parametrize("key", [SecretKey(), "secret" * 200000])
+@pytest.mark.parametrize("key", [SecretKey(), "secret" * 200000], ids=["object", "long-str"])
 def test_async_timeout_never_formats_keys(key: object) -> None:
     async def main() -> None:
         locks = AsyncKeyedLock()

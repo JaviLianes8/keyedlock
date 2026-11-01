@@ -1,5 +1,66 @@
 # keyedlock 1.0.0 certification report
 
+## Final certification, 2026-11-01
+
+Verdict: **PASS**. All five QA lenses and the independent reviewer passed, with
+no open findings. Reviewed release head: `237e2061c372cb709171319029996d5aa14aab40`.
+This consolidation changes only the certification record. The sections following
+this final scorecard retain the preparation history and its then-current statuses.
+Merge and publication have not occurred and remain separate release actions.
+
+Report paths below are relative to `scratch/keyedlock-cert/` in the workspace.
+Round numbers identify the finalization cycle; lens c retains its earlier round 3
+report without another run (round 0 in this cycle).
+
+| Lens | Rounds | Final verdict | Report path | Commit |
+| --- | --- | --- | --- | --- |
+| a. API and docs | 1 | PASS | `lens-a-r1/REPORT.md` | `68ea79b33c0d1ef8760279be86df45627d230f3b` |
+| b. Correctness and ground truth | 1 | PASS | `lens-b-r1/REPORT.md` | `68ea79b33c0d1ef8760279be86df45627d230f3b` |
+| c. Adversarial and robustness | 0 (retained round 3) | PASS | `lens-c-r3/REPORT.md`, retained in this report | `e21c990a3d9f2c81892b5e7719f4aaa198f8e791` |
+| d. Packaging and real e2e | 1 | PASS | `lens-d-r1/REPORT.md` | `68ea79b33c0d1ef8760279be86df45627d230f3b` |
+| e. Contract strength | 2 | PASS | `lens-e-r2/REPORT.md` | `237e2061c372cb709171319029996d5aa14aab40` |
+
+Production source is unchanged since lens c's reviewed commit. The changes after
+the a/b/d reviews affect only documentation and stripe-modulo contracts, including
+the installed-wheel consumer. Lens e verified the corrected contracts at the
+reviewed release head. Its ten additional mutations were all caught, and E-01 is
+resolved. The independent reviewer verified report applicability and repeated
+the complete suite, packaging, upgrade, interpreter and mutation checks.
+
+### Final reviewer scorecard
+
+Reviewer round: 1. Verdict: **PASS**. Findings: **none**.
+Report: `scratch/keyedlock-cert/review-r1/REPORT.md`.
+Reviewed commit: `237e2061c372cb709171319029996d5aa14aab40`.
+
+| Item | Final verdict | Reviewer evidence |
+| --- | --- | --- |
+| 1. Stable public API | PASS | Names, signatures and defaults retained; changes from PyPI 0.2.0 documented and checked by upgrade contracts. |
+| 2. Exact public surface | PASS | Exact exports, public imports and installed class identity verified. |
+| 3. Runnable docstrings | PASS | All 12 public docstrings, 34 statements and seven Markdown examples execute. |
+| 4. End-to-end typing | PASS | Strict source and test typing pass for 45 files; installed types and packaged marker verified. |
+| 5. Documented, bounded errors | PASS | Exception families, secret and huge inputs, protocol failures and propagated caller exceptions checked. |
+| 6. Complete contracts | PASS | 853 tests pass without skips; independent mutations demonstrate behavioral failures. |
+| 7. Real ground truth | PASS | Three pinned CPython sources refetched and hash-verified; native dictionary, hash, lock and FIFO comparisons execute. |
+| 8. Real e2e and upgrade | PASS | Clean wheel install, isolated consumer and actual PyPI 0.2.0 upgrade pass; no CLI exists. |
+| 9. Seeded and hostile-input tests | PASS | Seeded stress, cancellation, bounded collisions and deep-structure rejection pass. |
+| 10. Available Python versions | PASS | Runtime suite passes on all 12 discovered supported builds, including free-threaded 3.14; optional-tool and stale-path limits recorded in the review. |
+| 11. README | PASS | Strict rendering checks, absolute links, examples, comparison and documentation links verified. |
+| 12. Dated CHANGELOG | PASS | Stable API and behavior changes recorded under `1.0.0 - 2026-11-01`. |
+| 13. Project metadata | PASS | Version 1.0.0, stable classifier, Python 3.10-3.14, MIT, URLs and no runtime dependencies verified. |
+| 14. Archive contents | PASS | 14 wheel and 55 sdist entries inspected; license and types present; no scratch or fetched specification text shipped. |
+| 15. Four gates | PASS | Format, lint, strict source typing and all 853 tests each exit zero independently. |
+| 16. Independent review | PASS | Fresh checkout audit completed with no findings. |
+| 17. Release readiness | PASS | PR #3 is open from `release/1.0.0` to `main`; reviewer recorded `CLEAN: keyedlock #3`. Merge and publication remain pending. |
+| 18. Mutation strength | PASS | Original 24 mutations and correction rounds recorded below; all 12 independent reviewer mutations killed. |
+| 19. Five QA lenses | PASS | All five reports and backing evidence verified; applicability checked against the reviewed head. |
+
+Item 17 is scored here for the authorized pre-merge certification scope. The
+reviewer explicitly recorded it as pending merge, while passing all 18 reviewable
+items. This readiness PASS does not represent a completed merge or publication.
+
+## Preparation history
+
 Preparation date: 2026-11-01. Resumed source: `5addc52`.
 The original preparation scorecard and evidence below are historical at `dbc21ba`.
 Current correction results are in the QA lenses, round 1 section; the historical

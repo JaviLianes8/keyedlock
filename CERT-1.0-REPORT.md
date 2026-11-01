@@ -339,7 +339,8 @@ re-review, merge and publication remain separate stages.
 ## QA findings, round 3
 
 Date: 2026-11-01. Reviewed base: `e21c990a3d9f2c81892b5e7719f4aaa198f8e791`.
-Correction commit: `strengthen rational timeout contracts` (this commit).
+Correction commit: `b9dba092d70fa13232d5f78dc47c56f32bdb9a1c`
+(`strengthen rational timeout contracts`).
 All six supplied findings E-17 through E-22 are addressed. No finding is disputed.
 These findings concern missing contracts: the existing runtime behavior is retained,
 as are public names, signatures and defaults. GUIDE makes the rational component,
@@ -382,6 +383,10 @@ Validation:
 - Full pytest with a 300-second per-test limit, wheel installation, actual PyPI
   0.2.0 upgrade, archive checks and fetched-specification checks: **646 passed**,
   no skips, exit 0 on CPython 3.14.6.
+- Available interpreter matrix: CPython 3.10.22, 3.11.11, 3.11.18, 3.12.16,
+  3.13.18, 3.14.6, 3.14.10 and 3.14.10 free-threaded. Each ran the revised source
+  suite: **645 passed**, one separately exercised wheel test skipped, exit 0.
+  The free-threaded run verified the GIL remained disabled through suite completion.
 
 Detailed logs, exact mutation patches, commands and restoration evidence are retained
 under `scratch/keyedlock-cert/fix-r3/`. No new independent QA lens PASS is claimed;

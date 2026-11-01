@@ -50,6 +50,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Negative-hash stripe collision contracts for `lock` and `lock_many` with
+  non-power-of-two pools, including installed-wheel checks. The documented
+  `hash(key) % stripes` behavior and public API are unchanged.
 - Runnable examples for every public class, method and property, a detailed guide,
   standard-library differential tests and expanded error and contract coverage.
 - Contracts for striped group deadlines, contended huge-timeout handoff, and striped

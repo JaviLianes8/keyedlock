@@ -65,6 +65,20 @@ striped = StripedLock(stripes=1)
 with striped.lock_many(["p", "q"]):
     pass
 
+for stripes, negative, collision in [(3, -7, 2), (5, -11, 4), (7, -15, 6)]:
+    striped = StripedLock(stripes)
+    for held in [striped.lock(negative), striped.lock_many([negative, collision])]:
+        with held:
+            with striped.lock(1, timeout=0):
+                pass
+            for attempt in [striped.lock(collision, timeout=0),
+                            striped.lock_many([collision], timeout=0)]:
+                try:
+                    with attempt:
+                        raise AssertionError("negative hash lost its modulo collision")
+                except RuntimeError:
+                    pass
+
 async def main():
     alock = AsyncKeyedLock()
     order = []

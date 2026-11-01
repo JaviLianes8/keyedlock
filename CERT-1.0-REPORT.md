@@ -1,8 +1,9 @@
 # keyedlock 1.0.0 certification report
 
-Preparation date: 2026-11-01. Validated source: `dbc21ba`.
-The preparation evidence below is historical. Current correction results are in
-the QA round 5 section at the end of this report.
+Preparation date: 2026-11-01. Resumed source: `5addc52`.
+The original preparation scorecard and evidence below are historical at `dbc21ba`.
+Current correction results are in the QA round 5 section; the handoff below records
+which independent verdicts still apply. Runtime code has not changed since `88c091b`.
 Base: `main` at `4e54b50` (0.2.0). The interrupted branch's initial report at
 `11e48ff` remains in history. `https://pypi.org/pypi/keyedlock/json` returned HTTP 200 on 2026-11-01:
 0.2.0 was uploaded at 2026-11-01T02:11:21Z. Its earlier reported 404 is stale.
@@ -20,6 +21,51 @@ Progress:
 - [ ] Independent reviewer (item 16, separate stage)
 - [ ] Merge and publish (item 17, separate stage)
 - [ ] Five independent QA lenses (item 19, separate stage)
+
+## Preparation handoff
+
+Items 1 to 15 and 18 are complete. The resumed checkout was clean and matched the
+pushed release branch. All earlier commits and scratch evidence are retained.
+The latest complete suite has 826 cases; round 5 records the eight-build interpreter
+matrix and the mutation replays. No completed matrix or mutation round was repeated
+for this documentation-only handoff.
+
+On 2026-11-01, the PyPI JSON endpoint again returned HTTP 200 with 0.2.0 as its only
+release. All three pinned Python specification files were fetched again and matched
+the manifest hashes. Runtime file hashes match the saved round 5 restoration record.
+Every Python source file is at most 200 lines. The README retains the exact
+certification badge and link from the reference README.
+
+The final handoff gates each exited zero independently: format (51 files), lint,
+strict source typing (nine files), strict source-and-test typing (44 files), and
+pytest (826 passed, no skips, 60.90 seconds) with fetched specifications, wheel e2e
+and the actual PyPI 0.2.0 upgrade enabled. The suite exercises standard-library
+oracles, seeded properties, docstrings, Markdown examples, archive inspection and
+strict twine checks. Command evidence is retained in
+`scratch/keyedlock-cert/resume-preparation/`. There is no CLI to exercise.
+
+The rebuilt wheel contains 14 entries; the sdist contains 54. Both include LICENSE
+and `py.typed`, and neither contains caches, scratch files or fetched specification
+text. The sdist intentionally includes the contract suite and provenance manifest.
+SHA-256:
+
+- Wheel: `0a73606269254643c42c0a41d710cc080ea26cc7d8272ec9fba7505ab767b764`
+- Sdist: `d21c625eb24b4b331e0b4c9ca038f87c686ee1e646fd16ddc473811c8308fb51`
+
+### Inherited independent verdicts
+
+| Lens | Last verdict | Reviewed commit | Applicability at handoff |
+| --- | --- | --- | --- |
+| a. API and docs | PASS, round 2 | `d58d87c` | Re-verification required: later timeout error handling and documentation changed. |
+| b. Correctness and ground truth | PASS, round 1 | `b4ac8c9` | Re-verification required: later key validation, tables and timeout handling changed. |
+| c. Adversarial and robustness | PASS, round 3 | `e21c990` | Retained: no runtime code changed after this review; later commits add contracts and clarify existing behavior. |
+| d. Packaging and real e2e | PASS, round 1 | `b4ac8c9` | Re-verification required: later runtime, tests and documentation changed the artifacts. |
+| e. Contract strength | FAIL, round 5 | `08c5d6d` | E-27 through E-31 have regression contracts and successful mutation replays in `dfafc71`; independent re-verification remains pending. |
+
+The individual verdicts are recorded in the corresponding `lens-*/REPORT.md`
+files under the scratch directory. No independent reviewer PASS exists for the
+current release. Item 16, completion of item 19, merging and publication remain
+separate stages. PR #3 remains open from `release/1.0.0` to `main`.
 
 ## Scorecard
 

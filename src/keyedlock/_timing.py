@@ -12,6 +12,12 @@ from typing import Any, TypeVar, cast
 K = TypeVar("K", bound=Hashable)
 
 
+def checked_key(key: K) -> K:
+    if not isinstance(key, Hashable):
+        raise TypeError("key must be hashable")
+    return key
+
+
 def check_timeout(timeout: float | None) -> float | None:
     """Return the wait limit in seconds, or ``None`` to wait without limit.
 
@@ -46,7 +52,7 @@ def ordered(keys: Iterable[K]) -> list[K]:
     """Deduplicate ``keys`` and sort them, so every caller takes them in the same order."""
     if isinstance(keys, (str, bytes)):
         raise TypeError("keys must be a collection of keys, not a single str or bytes")
-    unique = list(dict.fromkeys(keys))
+    unique = list(dict.fromkeys(checked_key(key) for key in keys))
     message = "lock_many needs keys with a total order (all str, all int, ...; no NaN or sets)"
     try:
         result = sorted(cast("list[Any]", unique))

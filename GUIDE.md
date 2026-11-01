@@ -106,6 +106,7 @@ keys and arbitrary type names are no longer echoed. Public class `__module__`
 is now `keyedlock`; old pickled class references still resolve. Instances contain
 live synchronization state and are not promised to be pickleable.
 The async queue now avoids scans on handoff and cancellation.
+Unhashable keys now use the fixed message `key must be hashable`.
 
 ## Validation and sources
 

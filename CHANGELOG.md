@@ -19,6 +19,7 @@ All notable changes to this project are documented here. The format follows
 - Timeout errors no longer include the key or call its `repr`. Striped timeout errors
   identify the stripe index instead. Invalid timeout and stripe types use fixed messages
   without the supplied type name. This keeps keys and huge inputs out of library errors.
+- Unhashable keys raise `TypeError("key must be hashable")`, omitting their type name.
 - `reentrant` must be a boolean; truthy and falsey non-booleans now raise `TypeError`.
 - Public classes identify their module as `keyedlock` instead of a private module.
   Existing class references pickled through the old module paths still load.

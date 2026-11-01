@@ -12,6 +12,16 @@ version = sys.argv[1]
 assert keyedlock.__version__ == version
 old = version == "0.2.0"
 assert hasattr(keyedlock, "annotations") == old
+try:
+    with KeyedLock().lock([]):
+        pass
+except TypeError as error:
+    if old:
+        assert "list" in str(error)
+    else:
+        assert str(error) == "key must be hashable"
+else:
+    raise AssertionError("unhashable key accepted")
 classes = (KeyedLock, StripedLock, AsyncKeyedLock)
 if old:
     Path("classes.pickle").write_bytes(pickle.dumps(classes))

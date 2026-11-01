@@ -6,7 +6,7 @@ from collections.abc import Hashable, Iterable, Iterator
 from contextlib import ExitStack, contextmanager
 
 from ._primitive import Slot
-from ._timing import Deadline, check_timeout, ordered, timeout_error
+from ._timing import Deadline, check_timeout, checked_key, ordered, timeout_error
 
 
 class StripedLock:
@@ -49,7 +49,7 @@ class StripedLock:
         return len(self._slots)
 
     def _stripe_for(self, key: Hashable) -> int:
-        return hash(key) % len(self._slots)
+        return hash(checked_key(key)) % len(self._slots)
 
     @contextmanager
     def _hold(self, index: int, limit: float | None, shown: float | None) -> Iterator[None]:

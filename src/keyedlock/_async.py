@@ -8,7 +8,7 @@ from contextlib import AsyncExitStack, asynccontextmanager
 
 from ._fifo import FifoLock
 from ._primitive import drop_entry
-from ._timing import Deadline, check_timeout, ordered, timeout_error
+from ._timing import Deadline, check_timeout, checked_key, ordered, timeout_error
 
 
 class _AsyncEntry:
@@ -49,6 +49,7 @@ class AsyncKeyedLock:
         self._entries: dict[Hashable, _AsyncEntry] = {}
 
     def _checkout(self, key: Hashable) -> _AsyncEntry:
+        checked_key(key)
         entry = self._entries.get(key)
         if entry is None:
             entry = self._entries[key] = _AsyncEntry()

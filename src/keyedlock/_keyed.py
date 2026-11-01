@@ -7,7 +7,7 @@ from collections.abc import Hashable, Iterable, Iterator
 from contextlib import ExitStack, contextmanager
 
 from ._primitive import Slot, drop_entry
-from ._timing import Deadline, check_timeout, ordered, timeout_error
+from ._timing import Deadline, check_timeout, checked_key, ordered, timeout_error
 
 
 class _Entry(Slot):
@@ -50,6 +50,7 @@ class KeyedLock:
         self._entries: dict[Hashable, _Entry] = {}
 
     def _checkout(self, key: Hashable) -> _Entry:
+        checked_key(key)
         with self._guard:
             entry = self._entries.get(key)
             if entry is None:

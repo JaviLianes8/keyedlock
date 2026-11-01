@@ -6,8 +6,9 @@ import threading
 from collections.abc import Hashable, Iterable, Iterator
 from contextlib import ExitStack, contextmanager
 
-from ._primitive import Slot, drop_entry
-from ._timing import Deadline, check_timeout, checked_key, ordered, timeout_error
+from ._primitive import Slot
+from ._table import KeyTable
+from ._timing import Deadline, check_timeout, ordered, timeout_error
 
 
 class _Entry(Slot):
@@ -47,15 +48,11 @@ class KeyedLock:
             raise TypeError("reentrant must be a bool")
         self._reentrant = reentrant
         self._guard = threading.Lock()
-        self._entries: dict[Hashable, _Entry] = {}
+        self._entries: KeyTable[Hashable, _Entry] = KeyTable()
 
     def _checkout(self, key: Hashable) -> _Entry:
-        checked_key(key)
         with self._guard:
-            entry = self._entries.get(key)
-            if entry is None:
-                entry = _Entry(self._reentrant)
-                self._entries[key] = entry
+            entry = self._entries.intern(key, lambda _: _Entry(self._reentrant))
             entry.refs += 1
         return entry
 
@@ -63,7 +60,7 @@ class KeyedLock:
         with self._guard:
             entry.refs -= 1
             if entry.refs == 0:
-                drop_entry(self._entries, key, entry)
+                self._entries.drop(entry)
 
     @contextmanager
     def _hold(self, key: Hashable, limit: float | None, shown: float | None) -> Iterator[None]:

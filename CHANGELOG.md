@@ -20,6 +20,19 @@ All notable changes to this project are documented here. The format follows
   identify the stripe index instead. Invalid timeout and stripe types use fixed messages
   without the supplied type name. This keeps keys and huge inputs out of library errors.
 - Unhashable keys raise `TypeError("key must be hashable")`, omitting their type name.
+- Built-in hash rejection includes nested unhashable members and writable memoryviews.
+  Invalid collections use a fixed `TypeError`; normalized errors suppress displayed
+  exception chains that could reveal caller-controlled type names.
+- Group comparison `TypeError`s, including user subclasses, use a fixed total-order
+  `TypeError` without a displayed chain. This normalization policy is now explicit.
+- Keyed groups and active tables reject more than 64 unequal keys sharing one hash
+  with a fixed `ValueError`. Equal keys retain dictionary semantics; stripe collisions
+  remain unrestricted. Cleanup removes entries by identity without rehashing keys.
+- All classes reject tuple/frozenset keys exceeding 64 nested levels or 10,000 visited
+  values with fixed `ValueError`s before recursive built-in hashing.
+- Timeout validation checks normalized numeric values, preserving integer and rational
+  signs before float conversion. Integer stripe subclasses use their underlying value,
+  so overloaded comparisons cannot allow negative timeouts or empty stripe pools.
 - `reentrant` must be a boolean; truthy and falsey non-booleans now raise `TypeError`.
 - Public classes identify their module as `keyedlock` instead of a private module.
   Existing class references pickled through the old module paths still load.
@@ -35,6 +48,8 @@ All notable changes to this project are documented here. The format follows
 
 - Runnable examples for every public class, method and property, a detailed guide,
   standard-library differential tests and expanded error and contract coverage.
+- Contracts for striped group deadlines, contended huge-timeout handoff, and striped
+  and async group body-exception identity, propagation and cleanup.
 
 ## [0.2.0]
 

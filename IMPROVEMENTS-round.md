@@ -12,6 +12,7 @@ Progress:
 - [x] Gates: ruff format, ruff check, mypy --strict, pytest
 - [x] Independent review findings fixed with regression tests
 - [x] Pull request opened (#2), guard clean
+- [x] Certification QA round 1 corrections and regression contracts
 
 ## Starting point
 

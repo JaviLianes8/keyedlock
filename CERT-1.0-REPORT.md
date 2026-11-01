@@ -1,6 +1,8 @@
 # keyedlock 1.0.0 certification report
 
 Preparation date: 2026-11-01. Validated source: `dbc21ba`.
+The preparation evidence below is historical. Current correction results are in
+the QA round 1 section at the end of this report.
 Base: `main` at `4e54b50` (0.2.0). The interrupted branch's initial report at
 `11e48ff` remains in history. `https://pypi.org/pypi/keyedlock/json` returned HTTP 200 on 2026-11-01:
 0.2.0 was uploaded at 2026-11-01T02:11:21Z. Its earlier reported 404 is stale.
@@ -186,3 +188,75 @@ Pytest with `KEYEDLOCK_E2E=1`, `KEYEDLOCK_E2E_PYPI=1` and fetched specifications
 PR: https://github.com/JaviLianes8/keyedlock/pull/3. Guard: CLEAN.
 Independent reviewer and five QA lenses remain pending; no prior PASS is claimed.
 Merge and publication remain separate stages.
+
+## QA findings, round 1
+
+Date: 2026-11-01. Reviewed base: `b4ac8c90f7126726fd896fe2898c4dd83b4feb29`.
+Correction commit: this commit, `fix qa round one validation and contracts`.
+All 13 supplied findings are addressed; independent lens re-verification remains
+pending. No finding is disputed. Public names, signatures and defaults are retained.
+Every behavior change is listed in CHANGELOG and the error/limit policy is in GUIDE.
+
+| Finding | Change | Contract/evidence |
+| --- | --- | --- |
+| A1 | Validate actual hashing; normalize built-in unhashability, including nested members and writable memoryviews. | `test_protocol_errors.py`: all six entry points, safe complete tracebacks and valid read-only memoryview control. |
+| A2 | Suppress displayed ordering-error causes and contexts. | Complete formatted traceback assertions for both keyed group methods. |
+| A3 | Document normalization of comparison `TypeError`s, including subclasses, without a displayed chain. Other comparison exceptions retain propagation. | GUIDE policy corrected; explicit custom comparison exception contracts. This uses the finding's permitted documentation remedy. |
+| C-001 | Bound each full-hash bucket to 64 unequal keys in group deduplication and active tables. Reject the 65th with fixed `ValueError`; remove entries by identity. | `test_key_limits.py`: groups, successive individual entries, equality-work bound, cleanup, exact capacity, equal-key reuse and stripe control. |
+| C-002 | Normalize malformed collections and built-in key failures without exposing type names or displayed chains. | `test_protocol_errors.py` and the original A/C repro checks. |
+| C-003 | Convert built-in memoryview hash rejection to the documented `TypeError`. | Direct and nested memoryviews across all six entry points. |
+| C-004 | Validate underlying integers, normalized floats and rational numerator/denominator values before acquisition. | `test_numeric_validation.py`: negative integer/float subclasses, empty groups and negative rational underflow. |
+| C-005 | Normalize integer stripe subclasses before range validation and allocation. | Negative and zero counts rejected; valid underlying count retained despite overridden conversion. |
+| C-006 | Inspect built-in tuple/frozenset structure iteratively before hashing: at most 64 nested levels and 10,000 visited values. | All six 50,000-level tuple subprocess probes reject safely; exact depth boundary and shared-structure work limit tested. |
+| E-01 | Add a deterministic striped group deadline contract with two acquisition delays. | M19 killed; second acquisition receives 0.25 seconds after the first spends 0.75 of a one-second budget. |
+| E-02 | Test contended huge-timeout handoff on single and group methods across all classes. | M39 killed by 18 cases: infinity, twice the platform maximum and a 401-digit integer. |
+| E-03 | Assert striped group body-exception identity, propagation and immediate reuse. | M49 killed by `test_group_body_exception_identity_and_cleanup`. |
+| E-04 | Assert async group body-exception identity, propagation, zero active keys and immediate reuse. | M50 killed by `test_async_group_body_exception_identity_and_cleanup`. |
+
+The first new contract run against the reviewed source produced 54 failures and
+30 passes before implementation changes. The final suite adds 95 cases. Six deep
+tuple probes failed by subprocess termination before the fix and now return a
+documented `ValueError` without terminating the interpreter.
+
+Collision measurements use ordinary integers `i * sys.hash_info.modulus`, three
+samples per size. Group rejection, including cleanup, has the following medians:
+
+| Keys supplied | Keyed seconds | Async seconds | Striped seconds (accepted) |
+| --- | --- | --- | --- |
+| 1,000 | 0.000653 | 0.001700 | 0.002318 |
+| 2,000 | 0.000700 | 0.001809 | 0.003976 |
+| 4,000 | 0.000643 | 0.001072 | 0.008579 |
+| 8,000 | 0.000233 | 0.000938 | 0.017337 |
+| 16,000 | 0.000226 | 0.000977 | 0.035742 |
+
+Equality counters record exactly 2,080 comparisons before rejection for 100, 200,
+400 and 800 supplied keys, for both keyed classes and both groups and successive
+single acquisitions. Every idle table is empty. The fixed bound replaces the
+reviewed quadratic behavior; it does not bound arbitrary user method execution.
+
+The four surviving mutations were replayed individually on an isolated copy.
+The unchanged new group contracts pass before and after replay: 22 passed.
+M19, M49 and M50 each cause one failure; M39 causes 18 failures. M39's replacement
+was applied to the integer and float overflow branches introduced by this fix.
+No mutation failed during collection.
+
+Validation:
+
+- `ruff format --check .`: exit 0, 44 files formatted.
+- `ruff check .`: exit 0.
+- `mypy --strict src`: exit 0, nine files; `mypy --strict src tests`: exit 0, 37 files.
+- Full pytest with a 300-second per-test limit, wheel installation, actual PyPI
+  0.2.0 upgrade, archive checks and fetched-specification checks: 271 passed,
+  no skips, exit 0 on CPython 3.14.6.
+- Available interpreter matrix: CPython 3.10.22, 3.11.11, 3.11.18, 3.12.16,
+  3.13.18, 3.14.6, 3.14.10 and 3.14.10 free-threaded. Each ran the revised source
+  suite: 270 passed, one separately exercised wheel test skipped, exit 0.
+  The free-threaded run verified the GIL was disabled.
+- Original A/C targeted repro checks against the corrected source: 58 passed.
+  The two A3 assertions requiring preservation of comparison `TypeError`s were
+  deselected because the accepted remedy explicitly documents normalization;
+  replacement contracts test that policy and its complete displayed traceback.
+
+Detailed logs, isolated mutation edits, comparison counts and subprocess evidence
+are retained under `scratch/keyedlock-cert/fix-r1/`. No new QA lens PASS is claimed;
+the independent re-review, merge and publication remain separate stages.

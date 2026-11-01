@@ -46,6 +46,9 @@ have touched. `active_keys()` reports how many keys are held or waited on right 
 wait that ends early (a timeout, `KeyboardInterrupt`, a cancelled task) gives its place
 back too, and cleanup also attempts to recover from a key whose hash changed while held.
 Keys must keep stable hashes and equality while in use. Keys follow `dict` rules: `1`, `1.0` and `True` are the same key.
+Keyed tables and groups accept up to 64 unequal keys per hash. All classes reject
+tuple/frozenset keys deeper than 64 levels or larger than 10,000 visited values with
+`ValueError`. See the [key limits and error policy](https://github.com/JaviLianes8/keyedlock/blob/main/GUIDE.md#keys-and-ordering).
 
 ### Timeouts
 

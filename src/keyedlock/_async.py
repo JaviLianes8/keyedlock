@@ -7,8 +7,8 @@ from collections.abc import AsyncIterator, Hashable, Iterable
 from contextlib import AsyncExitStack, asynccontextmanager
 
 from ._fifo import FifoLock
-from ._primitive import drop_entry
-from ._timing import Deadline, check_timeout, checked_key, ordered, timeout_error
+from ._table import KeyTable
+from ._timing import Deadline, check_timeout, ordered, timeout_error
 
 
 class _AsyncEntry:
@@ -46,20 +46,17 @@ class AsyncKeyedLock:
     """
 
     def __init__(self) -> None:
-        self._entries: dict[Hashable, _AsyncEntry] = {}
+        self._entries: KeyTable[Hashable, _AsyncEntry] = KeyTable()
 
     def _checkout(self, key: Hashable) -> _AsyncEntry:
-        checked_key(key)
-        entry = self._entries.get(key)
-        if entry is None:
-            entry = self._entries[key] = _AsyncEntry()
+        entry = self._entries.intern(key, lambda _: _AsyncEntry())
         entry.refs += 1
         return entry
 
     def _checkin(self, key: Hashable, entry: _AsyncEntry) -> None:
         entry.refs -= 1
         if entry.refs == 0:
-            drop_entry(self._entries, key, entry)
+            self._entries.drop(entry)
 
     @asynccontextmanager
     async def _hold(

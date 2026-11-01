@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Hashable, Iterable, Iterator
 from contextlib import ExitStack, contextmanager
 
+from ._keys import checked_hash, iter_keys
 from ._primitive import Slot
-from ._timing import Deadline, check_timeout, checked_key, ordered, timeout_error
+from ._timing import Deadline, check_timeout, ordered, timeout_error
 
 
 class StripedLock:
@@ -34,6 +35,7 @@ class StripedLock:
             raise TypeError("reentrant must be a bool")
         if isinstance(stripes, bool) or not isinstance(stripes, int):
             raise TypeError("stripes must be an int (not bool)")
+        stripes = int.__index__(stripes)
         if stripes < 1:
             raise ValueError("stripes must be at least 1")
         self._slots = [Slot(reentrant) for _ in range(stripes)]
@@ -49,7 +51,7 @@ class StripedLock:
         return len(self._slots)
 
     def _stripe_for(self, key: Hashable) -> int:
-        return hash(checked_key(key)) % len(self._slots)
+        return checked_hash(key) % len(self._slots)
 
     @contextmanager
     def _hold(self, index: int, limit: float | None, shown: float | None) -> Iterator[None]:
@@ -92,11 +94,9 @@ class StripedLock:
         ...     print(held)
         None
         """
-        if isinstance(keys, (str, bytes)):
-            raise TypeError("keys must be a collection of keys, not a single str or bytes")
         limit = check_timeout(timeout)
         deadline = Deadline(limit)
-        stripes = ordered(self._stripe_for(key) for key in keys)
+        stripes = ordered(self._stripe_for(key) for key in iter_keys(keys))
         with ExitStack() as stack:
             for index in stripes:
                 stack.enter_context(self._hold(index, deadline.remaining(), limit))

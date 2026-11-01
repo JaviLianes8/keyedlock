@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import numbers
+import operator
 import threading
 import time
 from collections.abc import Hashable, Iterable
 from itertools import pairwise
 from typing import Any, TypeVar, cast
 
+from ._keys import iter_keys
+from ._table import KeyTable
+
 K = TypeVar("K", bound=Hashable)
-
-
-def checked_key(key: K) -> K:
-    if not isinstance(key, Hashable):
-        raise TypeError("key must be hashable")
-    return key
 
 
 def check_timeout(timeout: float | None) -> float | None:
@@ -28,12 +26,30 @@ def check_timeout(timeout: float | None) -> float | None:
         return None
     if isinstance(timeout, bool) or not isinstance(timeout, numbers.Real):
         raise TypeError("timeout must be a real number or None (not bool)")
-    # Compare before converting: a huge int would overflow float(), and NaN != NaN.
-    if timeout != timeout or timeout < 0:
+    # Integer subclasses must not override the sign or magnitude used below.
+    if isinstance(timeout, int):
+        integer = int.__index__(timeout)
+        if integer < 0:
+            raise ValueError("timeout must be None or a non-negative number")
+        if integer > threading.TIMEOUT_MAX:
+            return None
+        value = float(integer)
+    elif isinstance(timeout, numbers.Rational):
+        numerator = operator.index(timeout.numerator)
+        denominator = operator.index(timeout.denominator)
+        if denominator == 0 or (numerator != 0 and (numerator < 0) != (denominator < 0)):
+            raise ValueError("timeout must be None or a non-negative number")
+        try:
+            value = numerator / denominator
+        except OverflowError:
+            return None
+    else:
+        value = float(timeout)
+    if value != value or value < 0:
         raise ValueError("timeout must be None or a non-negative number")
-    if timeout > threading.TIMEOUT_MAX:
+    if value > threading.TIMEOUT_MAX:
         return None
-    return float(timeout)
+    return value
 
 
 class Deadline:
@@ -50,9 +66,10 @@ class Deadline:
 
 def ordered(keys: Iterable[K]) -> list[K]:
     """Deduplicate ``keys`` and sort them, so every caller takes them in the same order."""
-    if isinstance(keys, (str, bytes)):
-        raise TypeError("keys must be a collection of keys, not a single str or bytes")
-    unique = list(dict.fromkeys(checked_key(key) for key in keys))
+    table: KeyTable[K, K] = KeyTable()
+    for key in iter_keys(keys):
+        table.intern(key, lambda item: item)
+    unique = list(table.values())
     message = "lock_many needs keys with a total order (all str, all int, ...; no NaN or sets)"
     try:
         result = sorted(cast("list[Any]", unique))
@@ -60,8 +77,8 @@ def ordered(keys: Iterable[K]) -> list[K]:
         # would let two callers take the same keys in opposite orders and deadlock.
         if not all(a < b for a, b in pairwise(result)):
             raise TypeError(message)
-    except TypeError as error:
-        raise TypeError(message) from error
+    except TypeError:
+        raise TypeError(message) from None
     return cast("list[K]", result)
 
 

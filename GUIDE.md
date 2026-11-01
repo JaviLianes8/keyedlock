@@ -11,6 +11,7 @@ Private modules are implementation details. There is no CLI.
 `hash(key) % stripes`. Its read-only `stripes` property reports the pool size.
 Both synchronize threads in one process. `reentrant` must be a boolean;
 `stripes` must be an integer of at least one, excluding booleans.
+Integer subclasses use their underlying integer value for stripe allocation.
 
 `AsyncKeyedLock()` synchronizes tasks in one event loop. It is not thread-safe.
 Share the instance among tasks, but do not move it between active loops. It has no
@@ -49,8 +50,23 @@ intentionally share a mutex, even for unequal keys.
 Supply hashable keys with stable, non-raising hash and equality operations.
 Mutating a key while held violates this requirement: cleanup attempts to recover,
 but such keys cannot be relied on for exclusion. User-defined key operations and
-iterables can execute arbitrary code; their exceptions propagate and their execution
-time is not bounded by this library.
+iterables can execute arbitrary code; their execution time is not bounded by this
+library. Their exceptions propagate, except comparison `TypeError`s as described below.
+
+To bound collision work, keyed groups and active keyed tables allow at most 64
+unequal keys with the same hash. Adding a 65th raises
+`ValueError("key hash collision limit exceeded (64)")`. Equal keys do not consume
+another slot. The active-table limit includes holders and waiters across calls;
+releasing the final reference restores capacity. Striped keys have no collision
+limit because equal stripe indices intentionally share a mutex.
+
+Before hashing, all three classes inspect tuple and frozenset members iteratively,
+including subclasses. Keys may contain at most 64 nested tuple/frozenset levels
+and 10,000 visited values, counting the root and repeated references separately.
+Exceeding these limits raises `ValueError("key nesting limit exceeded (64)")` or
+`ValueError("key structure limit exceeded (10000)")`. This prevents recursive
+built-in hashing from exhausting the process stack or expanding shared structures
+without a bound. Custom key methods remain the caller's responsibility.
 
 `lock_many` consumes the iterable before acquiring anything, deduplicates keys,
 sorts them and checks each adjacent pair is strictly increasing. The caller must
@@ -58,6 +74,9 @@ provide a consistent total order. Incomparable pairs raise `TypeError`; a single
 does not need a comparison. Text and bytes passed as the entire collection are
 rejected. An empty iterable succeeds and holds nothing, after validating timeout.
 For striped locks, only stripe indices are sorted; mixed key types are fine.
+Comparison `TypeError`s, including subclasses raised by user comparison methods,
+are normalized to the fixed total-order `TypeError` without a displayed exception
+chain. Other comparison exceptions propagate unchanged.
 
 Use one `lock_many` call to acquire a group. Its ordering prevents cycles between
 otherwise unnested group acquisitions on the same instance. It cannot prevent
@@ -70,6 +89,10 @@ Reentering a non-reentrant key or stripe from its owner raises `RuntimeError`.
 Booleans, complex numbers, strings and `Decimal` are rejected. Integers and
 `Fraction` values work at runtime; the static annotation is `float | None`, which
 also accepts integers in type checkers. NaN and negative values raise `ValueError`.
+Validation uses normalized numeric values, not overloaded comparisons: integer
+subclasses use their underlying integer, rationals use their integer numerator and
+denominator, and other real numbers use their float conversion. Negative rationals
+are rejected even when conversion would round to negative zero.
 Above `threading.TIMEOUT_MAX`, including infinity and enormous positive integers,
 the timeout means no limit. This is a library policy, not the standard library's
 overflow behavior.
@@ -81,16 +104,21 @@ work inside a successful context or user-defined iterable/key operations.
 
 | Exception | Condition |
 | --- | --- |
-| `TypeError` | Invalid option type, unhashable key, text collection or incomparable keys. |
-| `ValueError` | Negative or NaN timeout; non-positive stripe count. |
+| `TypeError` | Invalid option type, unhashable key, invalid collection or comparison `TypeError`. |
+| `ValueError` | Negative or NaN timeout; non-positive stripe count; key collision or structure limit. |
 | `TimeoutError` | Acquisition could not complete within its remaining budget. |
 | `RuntimeError` | Same owner reenters a non-reentrant key or stripe. |
 | `asyncio.CancelledError` | The caller cancels the waiting or holding task. |
 
 Library-generated messages never format a key or caller-controlled type name.
 Timeout messages include the normalized timeout in seconds; striped errors also
-include a stripe index. Messages from user code, including key methods and the body,
-are not rewritten. Prefer catching the documented error families to matching text.
+include a stripe index. Built-in hash rejection, including nested unhashable members
+and writable memoryviews, becomes `TypeError("key must be hashable")`. A non-iterable
+collection becomes `TypeError("keys must be an iterable of keys")`. Normalized
+errors suppress their original displayed chains. Explicit exceptions from Python
+hash/iterator methods and the body retain their identity and messages; comparison
+`TypeError`s follow the normalization rule above. Prefer catching the documented
+error families to matching text.
 
 Threaded locks make no FIFO promise, matching `threading.Lock`.
 Async waiters on one key are FIFO, including waiters with positive timeouts.
@@ -100,13 +128,16 @@ lose their place.
 ## Upgrading from 0.2.0
 
 Install `keyedlock==1.0.0` over 0.2.0 with pip. Names, signatures, defaults, key
-semantics, return values, fairness and built-in error families remain unchanged.
+equality semantics, return values and fairness remain unchanged. Key collision and
+structure limits now reject excessive inputs with `ValueError` before unsafe work.
 Use actual booleans for `reentrant`, and update any assertions of error text:
 keys and arbitrary type names are no longer echoed. Public class `__module__`
 is now `keyedlock`; old pickled class references still resolve. Instances contain
 live synchronization state and are not promised to be pickleable.
 The async queue now avoids scans on handoff and cancellation.
 Unhashable keys now use the fixed message `key must be hashable`.
+Malformed collection and ordering errors also suppress unsafe displayed chains.
+Numeric subclasses cannot bypass timeout or stripe-count validation.
 
 ## Validation and sources
 

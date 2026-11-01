@@ -2,8 +2,9 @@
 
 Preparation date: 2026-11-01. Resumed source: `5addc52`.
 The original preparation scorecard and evidence below are historical at `dbc21ba`.
-Current correction results are in the QA round 5 section; the handoff below records
-which independent verdicts still apply. Runtime code has not changed since `88c091b`.
+Current correction results are in the QA lenses, round 1 section; the historical
+handoff below records earlier independent verdicts. Runtime code has not changed
+since `88c091b`.
 Base: `main` at `4e54b50` (0.2.0). The interrupted branch's initial report at
 `11e48ff` remains in history. `https://pypi.org/pypi/keyedlock/json` returned HTTP 200 on 2026-11-01:
 0.2.0 was uploaded at 2026-11-01T02:11:21Z. Its earlier reported 404 is stale.
@@ -22,7 +23,56 @@ Progress:
 - [ ] Merge and publish (item 17, separate stage)
 - [ ] Five independent QA lenses (item 19, separate stage)
 
-## Preparation handoff
+## QA lenses, round 1
+
+Reviewed source: `68ea79b33c0d1ef8760279be86df45627d230f3b`.
+Correction commit: `5afa50be44da105c4ec30fd1fa499c26d17f8850`
+(`add negative-hash stripe collision contracts`). Date: 2026-11-01.
+
+Finding **E-01 (medium)** is accepted: M20 changed stripe selection to
+`abs(hash(key)) % stripes` and survived the previous contracts and wheel checks.
+The reviewed implementation already follows the documented raw modulo rule;
+this correction adds missing assertions without changing runtime behavior or API.
+
+`tests/test_stripe_modulo.py` adds 27 public-API cases using pools of 3, 5 and 7
+stripes. Both acquisition methods are exercised as holder and nested caller.
+The cases assert negative-hash collisions with the modulo remainder, independent
+acquisition of the absolute-hash remainder, and group deduplication and release.
+The installed-wheel consumer now checks these collision classes too. CHANGELOG
+records the added coverage and the unchanged behavior.
+
+The exact removed and added lines from the reviewer's M20.patch were replayed
+on an isolated scratch copy, preserving local line endings. No production source
+was edited. The regression sequence was:
+
+| Check | Result |
+| --- | --- |
+| Unmodified source, new contracts | 27 passed, exit 0 |
+| M20, new contracts | 27 failed, exit 1 |
+| M20, installed-wheel consumer | Failed on incorrect contention for key 1 while holding -7, exit 1 |
+| Restored source, new contracts | 27 passed, exit 0 |
+
+The mutated wheel built, passed archive and metadata checks, and installed before
+the external consumer failed inside site-packages. This is a behavior failure,
+not a collection or packaging failure. Restored source bytes match the repository;
+the SHA-256 and individual results are recorded in the scratch evidence.
+
+Validation on CPython 3.14.6:
+
+- `ruff format --check .`: exit 0, 52 files formatted.
+- `ruff check .`: exit 0.
+- `mypy --strict src`: exit 0, nine files.
+- `mypy --strict src tests`: exit 0, 45 files.
+- Full pytest with a 300-second per-test timeout: **853 passed**, no skips, exit 0.
+  This includes clean wheel installation, the actual PyPI 0.2.0 upgrade, archive
+  inspection, strict twine checks and fetched-specification manifest checks.
+
+Evidence: `scratch/keyedlock-cert/fix-lenses-r1/`, including
+`mutation-results.json`, `M20-contracts.log`, `M20-wheel.log` and `pytest.log`.
+Earlier interpreter-matrix results remain historical; this correction was tested
+locally on CPython 3.14.6. Independent lens re-verification remains pending.
+
+## Preparation handoff (historical)
 
 Items 1 to 15 and 18 are complete. The resumed checkout was clean and matched the
 pushed release branch. All earlier commits and scratch evidence are retained.

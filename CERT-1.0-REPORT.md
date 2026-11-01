@@ -2,7 +2,7 @@
 
 Preparation date: 2026-11-01. Validated source: `dbc21ba`.
 The preparation evidence below is historical. Current correction results are in
-the QA round 3 section at the end of this report.
+the QA round 4 section at the end of this report.
 Base: `main` at `4e54b50` (0.2.0). The interrupted branch's initial report at
 `11e48ff` remains in history. `https://pypi.org/pypi/keyedlock/json` returned HTTP 200 on 2026-11-01:
 0.2.0 was uploaded at 2026-11-01T02:11:21Z. Its earlier reported 404 is stale.
@@ -390,4 +390,54 @@ Validation:
 
 Detailed logs, exact mutation patches, commands and restoration evidence are retained
 under `scratch/keyedlock-cert/fix-r3/`. No new independent QA lens PASS is claimed;
+re-review, merge and publication remain separate stages.
+
+## QA findings, round 4
+
+Date: 2026-11-01. Reviewed base: `b5603b43fa68901cf8f463c714c0692d6df3f7dd`.
+Correction commit: `a50b764e24df37219c4a9b3a126942c56353c245`
+(`strengthen rational budget and conversion contracts`).
+All four supplied findings E-23 through E-26 are addressed. No finding is disputed.
+These are missing regression contracts for existing behavior; no runtime change or
+public API change was needed. GUIDE clarifies component-based rational conversion,
+finite ratios with huge components and zero numerators with negative denominators.
+CHANGELOG records the added coverage. Independent lens re-verification is pending.
+
+| Finding | Change | Contract/evidence |
+| --- | --- | --- |
+| E-23 | Preserve the finite ratio of individually overflowing rational components. | `test_numeric_timeout_budget_reaches_acquisition`: irreducible `Fraction(10**400 + 1, 2 * 10**400 + 1)` supplies 0.5 seconds to all six methods. |
+| E-24 | Accept zero numerators with a negative nonzero denominator. | All six methods check successful free-key acquisition, a zero acquisition budget and immediate `TimeoutError` on held keys, including group rollback and reuse. |
+| E-25 | Reject negative rational values before float underflow can hide their sign. | `test_negative_denominator_underflow_raises_before_acquisition`: numerator 1 and denominator `-(10**400)` raise the fixed `ValueError` before key hashing on all six methods, followed by cleanup and reuse. |
+| E-26 | Use the validated rational components regardless of `__float__`. | All six budget contracts cover overrides returning zero, a negative value, a different positive value, infinity and NaN. A zero-returning override also waits for threaded and async handoff on every method. |
+
+The focused contracts pass on the unchanged implementation: **238 passed**. The
+suite adds **66 cases**. The reviewer's original witnesses also pass: **26 passed**.
+Each of the four reported mutations was replayed alone on an isolated scratch copy
+using the reviewer's exact replacement text. All four cause contract failures;
+none fails during collection. Source bytes are restored in `finally`, checked
+against the shared repository and verified by SHA-256. After restoration the same
+**238 focused tests pass**.
+
+| Mutation | Regression | Failing cases | Catching contract |
+| --- | --- | --- | --- |
+| B02 | Convert huge components to float before division | 6 | Finite-ratio acquisition budgets |
+| B03 | Reject zero with a negative denominator | 18 | Zero budgets and free/held acquisition |
+| B04 | Miss negative ratios with positive numerators | 6 | Fixed `ValueError` before key hashing |
+| B08 | Replace component division with `float(timeout)` | 36 | Five misleading float results and contended handoff |
+
+Validation:
+
+- `ruff format --check .`: exit 0, 51 files formatted.
+- `ruff check .`: exit 0.
+- `mypy --strict src`: exit 0, nine files; `mypy --strict src tests`: exit 0, 44 files.
+- Full pytest with a 300-second per-test limit, wheel installation, actual PyPI
+  0.2.0 upgrade, archive checks and fetched-specification checks: **712 passed**,
+  no skips, exit 0 on CPython 3.14.6.
+- Available interpreter matrix: CPython 3.10.22, 3.11.11, 3.11.18, 3.12.16,
+  3.13.18, 3.14.6, 3.14.10 and 3.14.10 free-threaded. Each ran the revised source
+  suite: **711 passed**, one separately exercised wheel test skipped, exit 0.
+  The free-threaded run verified the GIL remained disabled through suite completion.
+
+Detailed logs, exact mutation patches, commands and restoration evidence are retained
+under `scratch/keyedlock-cert/fix-r4/`. No new independent QA lens PASS is claimed;
 re-review, merge and publication remain separate stages.
